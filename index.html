@@ -830,7 +830,14 @@ function importAnnuelExcel(file){
             dateStr=`${jours[d.getDay()]} ${d.getDate()}`;
           }
         } else {
-          mois=STATE.moisCourant;annee=STATE.anneeCourante;
+          // Commande sans facture : utiliser la date de commande (col 0)
+          const dc=r[0];
+          if(dc&&typeof dc==='number'){
+            const d=new Date(Math.round((dc-25569)*86400)*1000);
+            mois=d.getUTCMonth();annee=d.getUTCFullYear();
+          } else {
+            mois=STATE.moisCourant;annee=STATE.anneeCourante;
+          }
         }
         if(mois===null) continue;
         const marge=hasFact?parseFloat(String(r[iM]||0).replace(',','.'))||0:parseFloat(String(r[iK]||0).replace(',','.'))||0;
