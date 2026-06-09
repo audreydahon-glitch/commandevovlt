@@ -358,7 +358,9 @@ const VENDEURS_DEF = [
 const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const JOURS_NOMS = ['Lun','Mar','Mer','Jeu','Ven','Sam'];
 
-let STATE = JSON.parse(localStorage.getItem('tb_vo_state') || 'null') || {
+// Nettoyer les anciennes clés
+['tb_vo_state','tb_vo_v5','mb_vlt','mb_vlt_v2','mb_vlt_v3','mb_vlt_v4'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+let STATE = JSON.parse(localStorage.getItem('tb_vo_v6') || 'null') || {
   objectif: 50,
   moisCourant: 5, // 0-based, 5 = juin
   anneeCourante: 2026,
@@ -368,7 +370,7 @@ initFromExcel(STATE);
 
 // ─── UTILS ───
 function fmtE(v){if(!v||v===0)return'0€';const r=Math.round(v);return(r<0?'−':'')+Math.abs(r).toLocaleString('fr-FR')+'€'}
-function saveAll(){localStorage.setItem('tb_vo_state',JSON.stringify(STATE));document.getElementById('saveStatus').textContent='Sauvegardé le '+new Date().toLocaleTimeString('fr-FR');}
+function saveAll(){localStorage.setItem('tb_vo_v6',JSON.stringify(STATE));document.getElementById('saveStatus').textContent='Sauvegardé le '+new Date().toLocaleTimeString('fr-FR');}
 function closeOverlay(id){document.getElementById(id).classList.remove('open')}
 function closeIf(e,id){if(e.target.id===id)closeOverlay(id)}
 
@@ -430,8 +432,8 @@ function updateObj(){
   renderProgress();
 }
 function renderProgress(){
-  // Uniquement les ventes facturées du mois courant
-  const ventes = ventesDuMois().filter(v=>v.facture);
+  // Objectif = ventes facturées du mois (vendeurs uniquement - ALCOPA/CESSION/MARCHAND exclus via import)
+  const ventes = ventesDuMois().filter(v=>v.facture===true);
   const nb = ventes.length;  const obj = STATE.objectif;
   const pct = obj?Math.min(Math.round(nb/obj*100),100):0;
   const ok = nb>=obj;
@@ -466,7 +468,7 @@ function ventesDuMoisParVendeur(vIdx){
 // ─── CARTES VENDEURS ───
 function renderVendeurCards(){
   document.getElementById('vendeursGrid').innerHTML = STATE.vendeurs.map((v,i)=>{
-    const vm = ventesDuMoisParVendeur(i);
+    const vm = ventesDuMoisParVendeur(i).filter(x=>x.facture===true);
     const totalMarge = vm.reduce((s,x)=>s+(x.marge||0),0);
     const nb=vm.length, nbFI=vm.filter(x=>x.fi).length, nbMAD=vm.filter(x=>x.mad).length;
     const nbCoyote=vm.filter(x=>x.coyote).length, nbProtech=vm.filter(x=>x.protech).length;
@@ -501,7 +503,7 @@ function renderVendeurCards(){
 
 // ─── CUMUL MENSUEL ───
 function renderCumul(){
-  const vm = ventesDuMois();
+  const vm = ventesDuMois().filter(x=>x.facture===true);
   const nb=vm.length, nbMAD=vm.filter(x=>x.mad).length, nbFI=vm.filter(x=>x.fi).length;
   const nbCoyote=vm.filter(x=>x.coyote).length, nbProtech=vm.filter(x=>x.protech).length;
   const nbBulbee=vm.filter(x=>x.bulbee).length, nbCession=vm.filter(x=>x.cession).length;
@@ -697,13 +699,13 @@ function importVentesExcel(file){
       if(hi<0){alert('En-tête non trouvé');return;}
 
       const hdr=rows[hi];
-      const ci=n=>hdr.findIndex(h=>h&&String(h).toUpperCase().includes(n.toUpperCase()));
-      const iV=ci('VENDEUR'),iF=ci('DATE DE FACTURE'),iM=ci('MARGE REELLE'),iK=ci('PREVISIONNELLE');
-      const iMod=ci('MODELE'),iIm=ci('IMMAT'),iCl=ci('CLIENT'),iG=ci('CESSION');
-      const iAd=ci('FRAIS ADMIN'),iCo=ci('COYOTE'),iFI=ci('FI '),iCA=ci('CA FIN');
-      const iAn=ci('ANNULATION'),iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH');
-      const iLo=ci('LOA'),iRe=ci('REPRISE'),iVo=ci('VOE');
-      const iJ=ci('NBRE JOUR');
+      const ci=n=>hdr.findIndex(h=>h&&String(h).toLowerCase().includes(n.toLowerCase()));
+      const iV=ci('vendeur'),iF=ci('facture'),iM=ci('reelle'),iK=ci('previsionnelle');
+      const iMod=ci('modele'),iIm=ci('immat'),iCl=ci('client'),iG=ci('cession');
+      const iAd=ci('admin'),iCo=ci('coyote'),iFI=ci('fi '),iCA=ci('ca fin');
+      const iAn=ci('annul'),iEu=ci('eurodatacar'),iBu=ci('bulb'),iPr=ci('protech');
+      const iLo=ci('loa'),iRe=ci('reprise'),iVo=ci('voe');
+      const iJ=ci('nbre jour');
 
       const VENDEURS_VALIDES = STATE.vendeurs.map(v=>v.nom);
       const moisCible = STATE.moisCourant;
@@ -727,12 +729,12 @@ function importVentesExcel(file){
           hasFact=true;
           let d;
           if(df instanceof Date){d=df;}
-          else if(typeof df==='number'){d=new Date(Math.round((df-25569)*86400)*1000);}
+          else if(typeof df==='number'){d=new Date((df-25569)*86400000);}
           else{try{d=new Date(df);}catch(e){}}
           if(d){
-            mois=d.getUTCMonth(); annee=d.getUTCFullYear();
-            const jours=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-            dateStr=`${jours[d.getUTCDay()]} ${d.getUTCDate()}`;
+            mois=d.getMonth(); annee=d.getFullYear();
+            const jours=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+            dateStr=`${jours[d.getDay()]} ${d.getDate()}`;
           }
         } else {
           // commande non facturée — utiliser date de commande
@@ -783,10 +785,10 @@ function importAnnuelExcel(file){
   const reader = new FileReader();
   reader.onload = e => {
     try{
-      const wb = XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const wb = XLSX.read(e.target.result,{type:'array',raw:true});
       const ws = wb.Sheets['VO'];
       if(!ws){alert('Feuille VO introuvable');return;}
-      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
       let hi=-1;
       for(let i=0;i<rows.length;i++){
         if(rows[i].some(c=>c&&String(c).includes('DATE CDE'))){hi=i;break;}
@@ -799,15 +801,13 @@ function importAnnuelExcel(file){
       const iAd=ci('FRAIS ADMIN'),iCo=ci('COYOTE'),iFI=ci('FI '),iAn=ci('ANNULATION'),iCA=ci('CA FIN');
       const iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH');
       const iLo=ci('LOA'),iRe=ci('REPRISE'),iJ=ci('NBRE JOUR');
-      console.log('Colonnes:',{iV,iF,iM,iK,iAn,iMod,iIm});
       const VENDEURS_VALIDES=STATE.vendeurs.map(v=>v.nom);
-      // Garder uniquement les ventes saisies manuellement (sans immat Excel ou ajoutées après)
-      // On vide seulement les ventes facturées qui viennent de l'Excel (facture:true)
-      // et on garde les ventes manuelles (celles sans immat ou ajoutées manuellement)
-      for(const v of STATE.vendeurs){
-        v.ventes = v.ventes.filter(vt => !vt.facture); // garder seulement les non-facturées (commandes manuelles)
-      }
+      // Garder uniquement les commandes saisies manuellement (non facturées)
+      for(const v of STATE.vendeurs) v.ventes=v.ventes.filter(vt=>!vt.facture);
       STATE._excelLoaded=false;
+      // Construire un set des immat déjà présentes pour éviter les doublons
+      const existants=new Set();
+      for(const v of STATE.vendeurs) v.ventes.forEach(vt=>{if(vt.immat)existants.add(vt.immat.toUpperCase().trim());});
       let nbImport=0;
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];
@@ -824,10 +824,8 @@ function importAnnuelExcel(file){
           else{try{d=new Date(String(df));}catch(ex){}}
           if(d&&!isNaN(d)){
             mois=d.getUTCMonth();annee=d.getUTCFullYear();
-            const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-            dateStr=jn[d.getUTCDay()]+' '+d.getUTCDate();
-            const jours=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
-            dateStr=`${jours[d.getDay()]} ${d.getDate()}`;
+            const jours=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+            dateStr=`${jours[d.getUTCDay()]} ${d.getUTCDate()}`;
           }
         } else {
           // Commande sans facture : utiliser la date de commande (col 0)
@@ -857,8 +855,11 @@ function importAnnuelExcel(file){
         const vend=STATE.vendeurs.find(v=>v.nom===vendeur);
         if(vend){
           const immatNew=String(r[iIm]||'').trim().toUpperCase();
-          const existe=immatNew&&vend.ventes.some(vt=>vt.immat&&vt.immat.toUpperCase()===immatNew&&vt.mois===mois&&vt.annee===annee);
-          if(!existe){vend.ventes.push(vObj);nbImport++;}
+          if(!immatNew||!existants.has(immatNew)){
+            vend.ventes.push(vObj);
+            if(immatNew)existants.add(immatNew);
+            nbImport++;
+          }
         }
       }
       saveAll();render();
