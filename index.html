@@ -359,18 +359,29 @@ const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','A
 const JOURS_NOMS = ['Lun','Mar','Mer','Jeu','Ven','Sam'];
 
 // Nettoyer les anciennes clés
-['tb_vo_state','tb_vo_v5','tb_vo_v6','mb_vlt','mb_vlt_v2','mb_vlt_v3','mb_vlt_v4'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
-let STATE = JSON.parse(localStorage.getItem('tb_vo_v7') || 'null') || {
+['tb_vo_state','tb_vo_v5','tb_vo_v6','tb_vo_v7','tb_vo_v8','tb_vo_v9','mb_vlt','mb_vlt_v2','mb_vlt_v3','mb_vlt_v4'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+let STATE = JSON.parse(localStorage.getItem('tb_vo_v10') || 'null') || {
   objectif: 50,
-  moisCourant: 5, // 0-based, 5 = juin
+  moisCourant: 5,
   anneeCourante: 2026,
   vendeurs: VENDEURS_DEF.map(v=>({...v, ventes:[]})),
 };
-initFromExcel(STATE);
+// Ne pas appeler initFromExcel si on a déjà des données sauvegardées
+if(STATE.vendeurs.flatMap(v=>v.ventes).length === 0) initFromExcel(STATE);
 
 // ─── UTILS ───
 function fmtE(v){if(!v||v===0)return'0€';const r=Math.round(v);return(r<0?'−':'')+Math.abs(r).toLocaleString('fr-FR')+'€'}
-function saveAll(){localStorage.setItem('tb_vo_v7',JSON.stringify(STATE));document.getElementById('saveStatus').textContent='Sauvegardé le '+new Date().toLocaleTimeString('fr-FR');}
+function saveAll(){
+  try{
+    const data = JSON.stringify(STATE);
+    console.log('Sauvegarde: '+Math.round(data.length/1024)+'KB, ventes: '+STATE.vendeurs.flatMap(v=>v.ventes).length);
+    localStorage.setItem('tb_vo_v10', data);
+    document.getElementById('saveStatus').textContent='Sauvegardé le '+new Date().toLocaleTimeString('fr-FR')+' ('+STATE.vendeurs.flatMap(v=>v.ventes).length+' ventes)';
+  }catch(e){
+    console.error('Erreur sauvegarde:',e);
+    document.getElementById('saveStatus').textContent='⚠️ Erreur: '+e.message;
+  }
+}
 function closeOverlay(id){document.getElementById(id).classList.remove('open')}
 function closeIf(e,id){if(e.target.id===id)closeOverlay(id)}
 
@@ -460,10 +471,18 @@ function renderProgress(){
 // ─── FILTRER VENTES DU MOIS ───
 // Filtre par DATE DE COMMANDE (pour cartes vendeurs et cumul mensuel)
 function ventesDuMoisCde(){
-  return STATE.vendeurs.flatMap(v=>v.ventes.filter(vt=>(vt.moisCde!==undefined?vt.moisCde:vt.mois)===STATE.moisCourant&&(vt.anneeCde!==undefined?vt.anneeCde:vt.annee)===STATE.anneeCourante));
+  return STATE.vendeurs.flatMap(v=>v.ventes.filter(vt=>{
+    const m = vt.moisCde!==undefined ? vt.moisCde : vt.mois;
+    const a = vt.anneeCde!==undefined ? vt.anneeCde : vt.annee;
+    return m===STATE.moisCourant && a===STATE.anneeCourante;
+  }));
 }
 function ventesDuMoisCdeParVendeur(vIdx){
-  return STATE.vendeurs[vIdx].ventes.filter(vt=>(vt.moisCde!==undefined?vt.moisCde:vt.mois)===STATE.moisCourant&&(vt.anneeCde!==undefined?vt.anneeCde:vt.annee)===STATE.anneeCourante);
+  return STATE.vendeurs[vIdx].ventes.filter(vt=>{
+    const m = vt.moisCde!==undefined ? vt.moisCde : vt.mois;
+    const a = vt.anneeCde!==undefined ? vt.anneeCde : vt.annee;
+    return m===STATE.moisCourant && a===STATE.anneeCourante;
+  });
 }
 // Filtre par DATE DE FACTURE (pour objectif mensuel)
 function ventesDuMois(){
@@ -694,10 +713,10 @@ function importVentesExcel(file){
   const reader = new FileReader();
   reader.onload = e => {
     try{
-      const wb = XLSX.read(e.target.result,{type:'array',raw:true});
+      const wb = XLSX.read(e.target.result,{type:'array',cellDates:true});
       const ws = wb.Sheets['VO'];
       if(!ws){alert('Feuille VO introuvable');return;}
-      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false});
 
       // Trouver l'en-tête
       let hi=-1;
@@ -767,8 +786,8 @@ function importVentesExcel(file){
           myana:'',facture:hasFact,
           fi:r[iFI]==1,mad:r[iAd]==1,bulbee:r[iBu]==1,
           coyote:r[iCo]==1,protech:r[iPr]==1,euro:r[iEu]==1,
-          cession:cessionVal==='OUI',reprise:r[iRe]==1,
-          voe:r[iVo]==1,plus120:nbreJour>120,
+          cession:cessionVal.includes('OUI'),reprise:r[iRe]==1,
+          voe:r[iVo]==1,plus120:nbreJour>=120,
           ca:r[iFI]==1?(parseFloat(String(r[iCA]||0).replace(/[^\d.-]/g,''))||0):0,
           mois,annee,
         };
@@ -793,15 +812,13 @@ function importAnnuelExcel(file){
   const reader = new FileReader();
   reader.onload = e => {
     try{
-      const wb = XLSX.read(e.target.result,{type:'array',raw:true});
-      const ws = wb.Sheets['VO'];
-      if(!ws){alert('Feuille VO introuvable');return;}
-      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
-      let hi=-1;
-      for(let i=0;i<rows.length;i++){
-        if(rows[i].some(c=>c&&String(c).includes('DATE CDE'))){hi=i;break;}
-      }
-      if(hi<0){alert('En-tête non trouvé');return;}
+      const wb = XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const sheetName = wb.SheetNames.find(n=>n.trim().toUpperCase()==='VO')||wb.SheetNames[0];
+      alert('Feuilles: '+wb.SheetNames.join(', ')+'\nUtilisée: '+sheetName);
+      const ws = wb.Sheets[sheetName];
+      if(!ws){alert('Feuille introuvable');return;}
+      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false});
+      alert('Lignes lues: '+rows.length);
       const hdr=rows[hi];
       const ci=n=>hdr.findIndex(h=>h&&String(h).toUpperCase().includes(n.toUpperCase()));
       const iV=ci('VENDEUR'),iF=ci('DATE DE FACTURE'),iM=ci('MARGE REELLE'),iK=ci('PREVISIONNELLE');
@@ -828,18 +845,31 @@ function importAnnuelExcel(file){
           hasFact=true;
           let d;
           if(df instanceof Date){d=df;}
-          else if(typeof df==='number'){d=new Date(Math.round((df-25569)*86400)*1000);}
-          else{try{d=new Date(String(df));}catch(ex){}}
-          if(d&&!isNaN(d)){
+          if(df instanceof Date){
+            mois=df.getMonth();annee=df.getFullYear();
+            const jours=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+            dateStr=`${jours[df.getDay()]} ${df.getDate()}`;
+          } else if(typeof df==='number'){
+            const totalDays=Math.floor(df);
+            const d=new Date(Date.UTC(1899,11,30));
+            d.setUTCDate(d.getUTCDate()+totalDays);
             mois=d.getUTCMonth();annee=d.getUTCFullYear();
             const jours=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
             dateStr=`${jours[d.getUTCDay()]} ${d.getUTCDate()}`;
+          } else if(typeof df==='string'){
+            const m=df.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if(m){mois=parseInt(m[2])-1;annee=parseInt(m[1]);dateStr=m[3]+'/'+m[2];}
+          }
           }
         } else {
           // Commande sans facture : utiliser la date de commande (col 0)
-          const dc=r[0];
-          if(dc&&typeof dc==='number'){
-            const d=new Date(Math.round((dc-25569)*86400)*1000);
+          const dc2=r[0];
+          if(dc2 instanceof Date){
+            mois=dc2.getMonth();annee=dc2.getFullYear();
+          } else if(dc2&&typeof dc2==='number'){
+            const totalDays=Math.floor(dc2);
+            const d=new Date(Date.UTC(1899,11,30));
+            d.setUTCDate(d.getUTCDate()+totalDays);
             mois=d.getUTCMonth();annee=d.getUTCFullYear();
           } else {
             mois=STATE.moisCourant;annee=STATE.anneeCourante;
@@ -852,9 +882,16 @@ function importAnnuelExcel(file){
         // Date de commande pour filtrage cartes/cumul
         const dc=r[0];
         let moisCde=mois,anneeCde=annee;
-        if(dc&&typeof dc==='number'){
-          const ddc=new Date(Math.round((dc-25569)*86400)*1000);
-          moisCde=ddc.getUTCMonth();anneeCde=ddc.getUTCFullYear();
+        if(dc instanceof Date){
+          moisCde=dc.getMonth();anneeCde=dc.getFullYear();
+        } else if(dc&&typeof dc==='number'){
+          const totalDays=Math.floor(dc);
+          const d=new Date(Date.UTC(1899,11,30));
+          d.setUTCDate(d.getUTCDate()+totalDays);
+          moisCde=d.getUTCMonth();anneeCde=d.getUTCFullYear();
+        } else if(dc&&typeof dc==='string'){
+          const m=dc.match(/(\d{4})-(\d{2})-(\d{2})/);
+          if(m){moisCde=parseInt(m[2])-1;anneeCde=parseInt(m[1]);}
         }
         const vObj={
           date:dateStr,modele:String(r[iMod]||'').trim(),
@@ -862,8 +899,8 @@ function importAnnuelExcel(file){
           marge:Math.round(marge*100)/100,myana:'',facture:hasFact,
           fi:r[iFI]==1,mad:r[iAd]==1,bulbee:r[iBu]==1,
           coyote:r[iCo]==1,protech:r[iPr]==1,euro:r[iEu]==1,
-          cession:cessionVal==='OUI',reprise:r[iRe]==1,
-          voe:r[iLo]==1,plus120:nbreJour>120,
+          cession:cessionVal.includes('OUI'),reprise:r[iRe]==1,
+          voe:r[iLo]==1,plus120:nbreJour>=120,
           ca:r[iFI]==1?(parseFloat(String(r[iCA]||0).replace(/[^\d.-]/g,''))||0):0,
           mois,annee,moisCde,anneeCde,
         };
