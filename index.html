@@ -359,8 +359,8 @@ const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','A
 const JOURS_NOMS = ['Lun','Mar','Mer','Jeu','Ven','Sam'];
 
 // Nettoyer les anciennes clés
-['tb_vo_state','tb_vo_v5','mb_vlt','mb_vlt_v2','mb_vlt_v3','mb_vlt_v4'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
-let STATE = JSON.parse(localStorage.getItem('tb_vo_v6') || 'null') || {
+['tb_vo_state','tb_vo_v5','tb_vo_v6','mb_vlt','mb_vlt_v2','mb_vlt_v3','mb_vlt_v4'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+let STATE = JSON.parse(localStorage.getItem('tb_vo_v7') || 'null') || {
   objectif: 50,
   moisCourant: 5, // 0-based, 5 = juin
   anneeCourante: 2026,
@@ -370,7 +370,7 @@ initFromExcel(STATE);
 
 // ─── UTILS ───
 function fmtE(v){if(!v||v===0)return'0€';const r=Math.round(v);return(r<0?'−':'')+Math.abs(r).toLocaleString('fr-FR')+'€'}
-function saveAll(){localStorage.setItem('tb_vo_v6',JSON.stringify(STATE));document.getElementById('saveStatus').textContent='Sauvegardé le '+new Date().toLocaleTimeString('fr-FR');}
+function saveAll(){localStorage.setItem('tb_vo_v7',JSON.stringify(STATE));document.getElementById('saveStatus').textContent='Sauvegardé le '+new Date().toLocaleTimeString('fr-FR');}
 function closeOverlay(id){document.getElementById(id).classList.remove('open')}
 function closeIf(e,id){if(e.target.id===id)closeOverlay(id)}
 
@@ -458,6 +458,14 @@ function renderProgress(){
 }
 
 // ─── FILTRER VENTES DU MOIS ───
+// Filtre par DATE DE COMMANDE (pour cartes vendeurs et cumul mensuel)
+function ventesDuMoisCde(){
+  return STATE.vendeurs.flatMap(v=>v.ventes.filter(vt=>(vt.moisCde!==undefined?vt.moisCde:vt.mois)===STATE.moisCourant&&(vt.anneeCde!==undefined?vt.anneeCde:vt.annee)===STATE.anneeCourante));
+}
+function ventesDuMoisCdeParVendeur(vIdx){
+  return STATE.vendeurs[vIdx].ventes.filter(vt=>(vt.moisCde!==undefined?vt.moisCde:vt.mois)===STATE.moisCourant&&(vt.anneeCde!==undefined?vt.anneeCde:vt.annee)===STATE.anneeCourante);
+}
+// Filtre par DATE DE FACTURE (pour objectif mensuel)
 function ventesDuMois(){
   return STATE.vendeurs.flatMap(v=>v.ventes.filter(vt=>vt.mois===STATE.moisCourant&&vt.annee===STATE.anneeCourante));
 }
@@ -468,7 +476,7 @@ function ventesDuMoisParVendeur(vIdx){
 // ─── CARTES VENDEURS ───
 function renderVendeurCards(){
   document.getElementById('vendeursGrid').innerHTML = STATE.vendeurs.map((v,i)=>{
-    const vm = ventesDuMoisParVendeur(i).filter(x=>x.facture===true);
+    const vm = ventesDuMoisCdeParVendeur(i);
     const totalMarge = vm.reduce((s,x)=>s+(x.marge||0),0);
     const nb=vm.length, nbFI=vm.filter(x=>x.fi).length, nbMAD=vm.filter(x=>x.mad).length;
     const nbCoyote=vm.filter(x=>x.coyote).length, nbProtech=vm.filter(x=>x.protech).length;
@@ -503,7 +511,7 @@ function renderVendeurCards(){
 
 // ─── CUMUL MENSUEL ───
 function renderCumul(){
-  const vm = ventesDuMois().filter(x=>x.facture===true);
+  const vm = ventesDuMoisCde();
   const nb=vm.length, nbMAD=vm.filter(x=>x.mad).length, nbFI=vm.filter(x=>x.fi).length;
   const nbCoyote=vm.filter(x=>x.coyote).length, nbProtech=vm.filter(x=>x.protech).length;
   const nbBulbee=vm.filter(x=>x.bulbee).length, nbCession=vm.filter(x=>x.cession).length;
@@ -544,7 +552,7 @@ function myanaBadge(v){
 
 function renderVentes(){
   document.getElementById('ventesList').innerHTML = STATE.vendeurs.map((v,vi)=>{
-    const vm = ventesDuMoisParVendeur(vi);
+    const vm = ventesDuMoisCdeParVendeur(vi);
     const totalMarge = vm.reduce((s,x)=>s+(x.marge||0),0);
     const rows = vm.map((vt,ti)=>{
       const globalIdx = STATE.vendeurs[vi].ventes.indexOf(vt);
@@ -841,6 +849,13 @@ function importAnnuelExcel(file){
         const marge=hasFact?parseFloat(String(r[iM]||0).replace(',','.'))||0:parseFloat(String(r[iK]||0).replace(',','.'))||0;
         const cessionVal=String(r[iG]||'').trim().toUpperCase();
         const nbreJour=parseFloat(r[iJ])||0;
+        // Date de commande pour filtrage cartes/cumul
+        const dc=r[0];
+        let moisCde=mois,anneeCde=annee;
+        if(dc&&typeof dc==='number'){
+          const ddc=new Date(Math.round((dc-25569)*86400)*1000);
+          moisCde=ddc.getUTCMonth();anneeCde=ddc.getUTCFullYear();
+        }
         const vObj={
           date:dateStr,modele:String(r[iMod]||'').trim(),
           immat:String(r[iIm]||'').trim(),client:String(r[iCl]||'').trim(),
@@ -850,7 +865,7 @@ function importAnnuelExcel(file){
           cession:cessionVal==='OUI',reprise:r[iRe]==1,
           voe:r[iLo]==1,plus120:nbreJour>120,
           ca:r[iFI]==1?(parseFloat(String(r[iCA]||0).replace(/[^\d.-]/g,''))||0):0,
-          mois,annee,
+          mois,annee,moisCde,anneeCde,
         };
         const vend=STATE.vendeurs.find(v=>v.nom===vendeur);
         if(vend){
