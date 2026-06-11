@@ -333,14 +333,11 @@ async function loadFromDB(){
       return;
     }
   }
-  document.getElementById('sst').textContent='Données locales';
-}
-
-;saveAll();render();}catch(e){alert('Erreur sauvegarde: '+e.message);}
-}
-
-;
+  // Supabase vide — charger les données Excel et sauvegarder
+  document.getElementById('sst').textContent='Initialisation...';
+  S.vendeurs = mkVendeurs();
   render();
+  await saveAll();
 }
 
 function rAnnual(){
