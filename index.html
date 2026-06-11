@@ -242,8 +242,20 @@ const SUPABASE_URL = 'https://mcxkadaorfvphcpcbilc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_U1elRvWbupuQq_xRlKefRg_NShc0vWK';
 const TABLE = 'Commande%20VO';
 
-// État global
+function mkVendeurs(){
+  return VDEF.map(v=>({...v, ventes:[...DATA_EXCEL[v.nom]||[]]}));
+}
+
 let S = {obj:50, mois:5, annee:2026, vendeurs:mkVendeurs()};
+
+function fE(v){if(!v||v===0)return'0€';const r=Math.round(v);return(r<0?'−':'')+Math.abs(r).toLocaleString('fr-FR')+'€'}
+function joOuv(an,mo){const dim=new Date(an,mo+1,0).getDate(),today=new Date();let tot=0,ec=0;for(let i=1;i<=dim;i++){const j=new Date(an,mo,i).getDay();if(j!==0){tot++;if(new Date(an,mo,i)<=today)ec++;}}return{tot,ec,re:tot-ec};}
+
+// Filtre par date de FACTURE (objectif mensuel)
+function vMoisFact(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>x.facture&&x.mois===S.mois&&x.annee===S.annee));}
+// Filtre par date de COMMANDE (cartes + cumul)
+function vMoisCde(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>(x.moisCde!==undefined?x.moisCde:x.mois)===S.mois&&(x.anneeCde!==undefined?x.anneeCde:x.annee)===S.annee));}
+function vMoisCdeV(vi){return S.vendeurs[vi].ventes.filter(x=>(x.moisCde!==undefined?x.moisCde:x.mois)===S.mois&&(x.anneeCde!==undefined?x.anneeCde:x.annee)===S.annee);}
 
 async function sbGet(){
   try{
