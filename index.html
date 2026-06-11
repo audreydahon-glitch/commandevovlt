@@ -242,6 +242,9 @@ const SUPABASE_URL = 'https://mcxkadaorfvphcpcbilc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_U1elRvWbupuQq_xRlKefRg_NShc0vWK';
 const TABLE = 'Commande%20VO';
 
+// État global
+let S = {obj:50, mois:5, annee:2026, vendeurs:mkVendeurs()};
+
 async function sbGet(){
   try{
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?select=*&order=id`, {
