@@ -475,7 +475,7 @@ function oEdit(vi,idx){
   document.getElementById('bdel').style.display='block';
   document.getElementById('ov').classList.add('open');
 }
-function savV(){
+async function savV(){
   const vi=parseInt(document.getElementById('evi').value);
   const obj={
     date:document.getElementById('fd').value.trim(),modele:document.getElementById('fm').value.trim(),
@@ -492,13 +492,13 @@ function savV(){
   const idx=document.getElementById('eidx').value;
   if(idx!=='')S.vendeurs[vi].ventes[parseInt(idx)]=obj;
   else S.vendeurs[vi].ventes.push(obj);
-  saveAll();render();cov();
+  await saveAll();render();cov();
 }
-function delV(){
+async function delV(){
   if(!confirm('Supprimer ?'))return;
   const vi=parseInt(document.getElementById('evi').value);
   const idx=parseInt(document.getElementById('eidx').value);
-  S.vendeurs[vi].ventes.splice(idx,1);saveAll();render();cov();
+  S.vendeurs[vi].ventes.splice(idx,1);await saveAll();render();cov();
 }
 function cov(){document.getElementById('ov').classList.remove('open');}
 function cif(e){if(e.target.id==='ov')cov();}
@@ -555,7 +555,7 @@ function importFactures(file){
           if(immat)existants.add(immat);nb++;
         }
       }
-      saveAll();render();
+      await saveAll();render();
       alert('✅ '+nb+' nouvelle'+(nb>1?'s':'')+' facture'+(nb>1?'s':'')+' ajoutée'+(nb>1?'s':''));
     }catch(err){alert('Erreur: '+err.message);}
   };
