@@ -513,12 +513,28 @@ function importXL(file, moisCible){
         if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
         const df=r[iF];if(!df)continue;
         let mois=null,annee=null,dateStr='';
-        if(df instanceof Date){mois=df.getMonth();annee=df.getFullYear();const jn=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];dateStr=jn[df.getDay()]+' '+df.getDate();}
-        else if(typeof df==='string'){const m=df.match(/(\d{4})-(\d{2})-(\d{2})/);if(m){mois=parseInt(m[2])-1;annee=parseInt(m[1]);dateStr=m[3]+'/'+m[2];}}
+        if(df instanceof Date){
+          mois=df.getUTCMonth();annee=df.getUTCFullYear();
+          const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+          dateStr=jn[df.getUTCDay()]+' '+df.getUTCDate();
+        } else if(typeof df==='string'){
+          const m=df.match(/(\d{4})-(\d{2})-(\d{2})/);
+          if(m){mois=parseInt(m[2])-1;annee=parseInt(m[1]);dateStr=m[3]+'/'+m[2];}
+        } else if(typeof df==='number'){
+          const d=new Date(Date.UTC(1899,11,30));
+          d.setUTCDate(d.getUTCDate()+Math.floor(df));
+          mois=d.getUTCMonth();annee=d.getUTCFullYear();
+          const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+          dateStr=jn[d.getUTCDay()]+' '+d.getUTCDate();
+        }
         if(mois===null)continue;
-        if(moisCible!==null&&(mois!==moisCible||annee!==S.annee))continue;
+        if(moisCible!==null&&(mois!==moisCible||annee!==S.annee)){console.log(`Ignoré: ${r[iV]} mois=${mois} moisCible=${moisCible}`);continue;}
         const dc=r[0];let moisCde=mois,anneeCde=annee;
-        if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
+        if(dc instanceof Date){moisCde=dc.getUTCMonth();anneeCde=dc.getUTCFullYear();}
+        else if(typeof dc==='number'){
+          const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(dc));
+          moisCde=d.getUTCMonth();anneeCde=d.getUTCFullYear();
+        }
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
         if(immat&&existants.has(immat))continue;
