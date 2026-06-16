@@ -527,8 +527,8 @@ function importXL(file, moisCible){
           vend.ventes.push({
             date:dateStr,modele:String(r[iMo]||'').trim(),immat,client:String(r[iCl]||'').trim(),
             marge:Math.round(mg*100)/100,myana:'',facture:true,
-            fi:r[iFI]==1,mad:r[iAd]==1,bulbee:r[iBu]==1,coyote:r[iCo]==1,protech:r[iPr]==1,euro:r[iEu]==1,
-            cession:'OUI' in String(r[iG]||'').toUpperCase(),reprise:r[iRe]==1,voe:r[iLo]==1,
+            fi:r[iFI]===1,mad:r[iAd]===1,bulbee:r[iBu]===1,coyote:r[iCo]===1,protech:r[iPr]===1,euro:r[iEu]===1,
+            cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
             plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
           });
           if(immat)existants.add(immat);nb++;
