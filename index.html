@@ -493,15 +493,11 @@ function importXL(file, moisCible){
       const iCo=ci('COYOTE'),iFI=ci('FI '),iAN=ci('ANNULATION'),iCA=ci('CA FIN');
       const iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH'),iLo=ci('LOA'),iRe=ci('REPRISE'),iJ=ci('NBRE JOUR');
       console.log('Colonnes:',{iV,iF,iM,iMo,iIm,hi});
-      // Chercher les lignes avec immat connues de juin (HD-741-HF, HJ-825-MH, etc.)
-      const immatsJuinConnues = ['HD-741-HF','HJ-825-MH','GT-875-VG','HC-946-SD'];
-      for(let t=hi+1;t<rows.length;t++){
+      // Dump direct des lignes 375-400 (où Python trouve les vraies factures CHAUMONT/juin)
+      for(let t=375;t<400 && t<rows.length;t++){
         const r=rows[t];if(!r)continue;
-        const immatVal = String(r[iIm]||'').trim();
-        if(immatsJuinConnues.some(im=>immatVal.includes(im.split('-')[0]))){
-          const rRaw=rowsRaw[t];
-          console.log(`Ligne JS ${t}: immat=${immatVal}, vendeur=${r[iV]}, dateF(cellDates)=${r[iF]} type=${typeof r[iF]}, dateF(raw)=${rRaw?rRaw[iF]:'?'} type=${rRaw?typeof rRaw[iF]:'?'}`);
-        }
+        const rRaw=rowsRaw[t];
+        console.log(`L${t}: immat="${r[iIm]}" vendeur="${r[iV]}" dateF(CD)=${r[iF]} (${typeof r[iF]}) dateF(raw)=${rRaw?rRaw[iF]:'?'} (${rRaw?typeof rRaw[iF]:'?'})`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
       let totalJuin=0,totalJuinRaw=0;
