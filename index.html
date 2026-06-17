@@ -498,6 +498,12 @@ function importXL(file, moisCible){
         console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
+      let totalJuin=0;
+      for(let i=hi+1;i<rows.length;i++){
+        const rr=rows[i];if(!rr)continue;
+        if(rr[iF] instanceof Date && rr[iF].getMonth()===5) totalJuin++;
+      }
+      console.log('TOTAL lignes avec dateF en juin (avant filtres vendeur/annul):', totalJuin);
       // Supprimer les facturées existantes si import mensuel
       if(moisCible!==null){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
