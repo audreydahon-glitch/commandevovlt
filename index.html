@@ -493,14 +493,14 @@ function importXL(file, moisCible){
       const iCo=ci('COYOTE'),iFI=ci('FI '),iAN=ci('ANNULATION'),iCA=ci('CA FIN');
       const iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH'),iLo=ci('LOA'),iRe=ci('REPRISE'),iJ=ci('NBRE JOUR');
       console.log('Colonnes:',{iV,iF,iM,iMo,iIm,hi});
-      console.log('En-tête complet ligne',hi,':',JSON.stringify(hdr));
-      console.log('Valeur hdr[iF]:',hdr[iF]);
-      // Dump valeurs colonne iF pour les lignes 330-400 (où Python trouve juin)
-      for(let t=330;t<400 && t<rows.length;t++){
-        const valCD = rows[t] ? rows[t][iF] : undefined;
-        const valRaw = rowsRaw[t] ? rowsRaw[t][iF] : undefined;
-        if(valCD || valRaw){
-          console.log(`L${t}: cellDates=${valCD} (${typeof valCD}) | raw=${valRaw} (${typeof valRaw})`);
+      // Chercher les lignes avec immat connues de juin (HD-741-HF, HJ-825-MH, etc.)
+      const immatsJuinConnues = ['HD-741-HF','HJ-825-MH','GT-875-VG','HC-946-SD'];
+      for(let t=hi+1;t<rows.length;t++){
+        const r=rows[t];if(!r)continue;
+        const immatVal = String(r[iIm]||'').trim();
+        if(immatsJuinConnues.some(im=>immatVal.includes(im.split('-')[0]))){
+          const rRaw=rowsRaw[t];
+          console.log(`Ligne JS ${t}: immat=${immatVal}, vendeur=${r[iV]}, dateF(cellDates)=${r[iF]} type=${typeof r[iF]}, dateF(raw)=${rRaw?rRaw[iF]:'?'} type=${rRaw?typeof rRaw[iF]:'?'}`);
         }
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
@@ -529,8 +529,9 @@ function importXL(file, moisCible){
         if(!vnom||!VNOMS.includes(vnom))continue;
         if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
         const dfRaw = rowsRaw[i] ? rowsRaw[i][iF] : null;
-        const df=r[iF];if(!df && (dfRaw===null||dfRaw===undefined||dfRaw===''))continue;
+        const df=r[iF];if(!df && !dfRaw)continue;
         let mois=null,annee=null,dateStr='';
+        // Priorité: si dfRaw est un nombre pur, utiliser SSF (le plus fiable)
         if(typeof dfRaw==='number'){
           const parsed = XLSX.SSF.parse_date_code(dfRaw);
           if(parsed){
@@ -539,6 +540,11 @@ function importXL(file, moisCible){
             const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
             dateStr=jn[jsDate.getDay()]+' '+parsed.d;
           }
+        } else if(dfRaw instanceof Date){
+          // Utiliser la date "raw" en priorité (moins de transformation)
+          mois=dfRaw.getMonth();annee=dfRaw.getFullYear();
+          const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+          dateStr=jn[dfRaw.getDay()]+' '+dfRaw.getDate();
         } else if(df instanceof Date){
           mois=df.getMonth();annee=df.getFullYear();
           const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
