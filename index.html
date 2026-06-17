@@ -503,14 +503,6 @@ function importXL(file, moisCible){
           console.log(`L${t}: cellDates=${valCD} (${typeof valCD}) | raw=${valRaw} (${typeof valRaw})`);
         }
       }
-      console.log('En-tête complet ligne',hi,':',JSON.stringify(hdr));
-      console.log('Valeur hdr[iF]:',hdr[iF]);
-      // Test sur les 5 premières lignes
-      for(let t=hi+1;t<Math.min(hi+5,rows.length);t++){
-        const r=rows[t];
-        if(!r)continue;
-        console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
-      }
       const VNOMS=S.vendeurs.map(v=>v.nom);
       let totalJuin=0,totalJuinRaw=0;
       for(let i=hi+1;i<rows.length;i++){
@@ -518,12 +510,11 @@ function importXL(file, moisCible){
         if(rr[iF] instanceof Date && rr[iF].getMonth()===5) totalJuin++;
         const rrR = rowsRaw[i];
         if(rrR && typeof rrR[iF]==='number'){
-          const d=new Date(Date.UTC(1899,11,30));
-          d.setUTCDate(d.getUTCDate()+Math.floor(rrR[iF]));
-          if(d.getUTCMonth()===5) totalJuinRaw++;
+          const p = XLSX.SSF.parse_date_code(rrR[iF]);
+          if(p && p.m===6) totalJuinRaw++;
         }
       }
-      console.log('TOTAL lignes avec dateF en juin (cellDates):', totalJuin, '| (raw):', totalJuinRaw);
+      console.log('TOTAL lignes avec dateF en juin (cellDates):', totalJuin, '| (raw via SSF):', totalJuinRaw);
       // Supprimer les facturées existantes si import mensuel
       if(moisCible!==null){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
@@ -541,32 +532,37 @@ function importXL(file, moisCible){
         const df=r[iF];if(!df && (dfRaw===null||dfRaw===undefined||dfRaw===''))continue;
         let mois=null,annee=null,dateStr='';
         if(typeof dfRaw==='number'){
-          const d=new Date(Date.UTC(1899,11,30));
-          d.setUTCDate(d.getUTCDate()+Math.floor(dfRaw));
-          mois=d.getUTCMonth();annee=d.getUTCFullYear();
-          const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-          dateStr=jn[d.getUTCDay()]+' '+d.getUTCDate();
+          const parsed = XLSX.SSF.parse_date_code(dfRaw);
+          if(parsed){
+            mois=parsed.m-1;annee=parsed.y;
+            const jsDate=new Date(parsed.y,parsed.m-1,parsed.d);
+            const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+            dateStr=jn[jsDate.getDay()]+' '+parsed.d;
+          }
         } else if(df instanceof Date){
           mois=df.getMonth();annee=df.getFullYear();
           const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
           dateStr=jn[df.getDay()]+' '+df.getDate();
-        } else if(typeof df==='string'){
-          const m=df.match(/(\d{4})-(\d{2})-(\d{2})/);
+        } else if(typeof dfRaw==='string'||typeof df==='string'){
+          const sVal = (typeof dfRaw==='string'&&dfRaw)?dfRaw:df;
+          let m = sVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
           if(m){mois=parseInt(m[2])-1;annee=parseInt(m[1]);dateStr=m[3]+'/'+m[2];}
-        } else if(typeof df==='number'){
-          const d=new Date(Date.UTC(1899,11,30));
-          d.setUTCDate(d.getUTCDate()+Math.floor(df));
-          mois=d.getUTCMonth();annee=d.getUTCFullYear();
-          const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-          dateStr=jn[d.getUTCDay()]+' '+d.getUTCDate();
+          else {
+            m = sVal.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+            if(m){
+              let yy=parseInt(m[3]);
+              if(yy<100) yy = yy<50 ? 2000+yy : 1900+yy;
+              mois=parseInt(m[2])-1;annee=yy;dateStr=m[1]+'/'+m[2];
+            }
+          }
         }
         if(mois===null)continue;
         if(moisCible!==null&&(mois!==moisCible||annee!==S.annee)){console.log(`Ignoré: ${r[iV]} mois=${mois} moisCible=${moisCible}`);continue;}
         const dcRaw = rowsRaw[i] ? rowsRaw[i][0] : null;
         const dc=r[0];let moisCde=mois,anneeCde=annee;
         if(typeof dcRaw==='number'){
-          const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(dcRaw));
-          moisCde=d.getUTCMonth();anneeCde=d.getUTCFullYear();
+          const parsedC = XLSX.SSF.parse_date_code(dcRaw);
+          if(parsedC){moisCde=parsedC.m-1;anneeCde=parsedC.y;}
         } else if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
