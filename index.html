@@ -481,6 +481,8 @@ function importXL(file, moisCible){
       const ws=wb.Sheets[wb.SheetNames.find(n=>n.trim().toUpperCase()==='VO')||wb.SheetNames[0]];
       if(!ws){alert('Feuille VO introuvable');return;}
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+      const rowsRaw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+      console.log('Total lignes (cellDates):',rows.length,'Total lignes (raw):',rowsRaw.length);
       let hi=-1;
       for(let i=0;i<rows.length;i++){if(rows[i]&&rows[i].some(c=>c&&String(c).includes('DATE CDE'))){hi=i;break;}}
       if(hi<0){alert('En-tête non trouvé');return;}
@@ -498,12 +500,18 @@ function importXL(file, moisCible){
         console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
-      let totalJuin=0;
+      let totalJuin=0,totalJuinRaw=0;
       for(let i=hi+1;i<rows.length;i++){
         const rr=rows[i];if(!rr)continue;
         if(rr[iF] instanceof Date && rr[iF].getMonth()===5) totalJuin++;
+        const rrR = rowsRaw[i];
+        if(rrR && typeof rrR[iF]==='number'){
+          const d=new Date(Date.UTC(1899,11,30));
+          d.setUTCDate(d.getUTCDate()+Math.floor(rrR[iF]));
+          if(d.getUTCMonth()===5) totalJuinRaw++;
+        }
       }
-      console.log('TOTAL lignes avec dateF en juin (avant filtres vendeur/annul):', totalJuin);
+      console.log('TOTAL lignes avec dateF en juin (cellDates):', totalJuin, '| (raw):', totalJuinRaw);
       // Supprimer les facturées existantes si import mensuel
       if(moisCible!==null){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
@@ -517,14 +525,16 @@ function importXL(file, moisCible){
         const vnom=String(r[iV]||'').trim().toUpperCase();
         if(!vnom||!VNOMS.includes(vnom))continue;
         if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
-        if(!r[iF]) continue;
-        // Log spécifique pour debug juin
-        if(r[iF] instanceof Date && r[iF].getMonth()===5){
-          console.log('JUIN TROUVÉ:',vnom,r[iF],'getMonth=',r[iF].getMonth());
-        }
-        const df=r[iF];if(!df)continue;
+        const dfRaw = rowsRaw[i] ? rowsRaw[i][iF] : null;
+        const df=r[iF];if(!df && (dfRaw===null||dfRaw===undefined||dfRaw===''))continue;
         let mois=null,annee=null,dateStr='';
-        if(df instanceof Date){
+        if(typeof dfRaw==='number'){
+          const d=new Date(Date.UTC(1899,11,30));
+          d.setUTCDate(d.getUTCDate()+Math.floor(dfRaw));
+          mois=d.getUTCMonth();annee=d.getUTCFullYear();
+          const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+          dateStr=jn[d.getUTCDay()]+' '+d.getUTCDate();
+        } else if(df instanceof Date){
           mois=df.getMonth();annee=df.getFullYear();
           const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
           dateStr=jn[df.getDay()]+' '+df.getDate();
@@ -540,12 +550,12 @@ function importXL(file, moisCible){
         }
         if(mois===null)continue;
         if(moisCible!==null&&(mois!==moisCible||annee!==S.annee)){console.log(`Ignoré: ${r[iV]} mois=${mois} moisCible=${moisCible}`);continue;}
+        const dcRaw = rowsRaw[i] ? rowsRaw[i][0] : null;
         const dc=r[0];let moisCde=mois,anneeCde=annee;
-        if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
-        else if(typeof dc==='number'){
-          const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(dc));
+        if(typeof dcRaw==='number'){
+          const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(dcRaw));
           moisCde=d.getUTCMonth();anneeCde=d.getUTCFullYear();
-        }
+        } else if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
         if(immat&&existants.has(immat))continue;
