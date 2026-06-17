@@ -493,6 +493,18 @@ function importXL(file, moisCible){
       const iCo=ci('COYOTE'),iFI=ci('FI '),iAN=ci('ANNULATION'),iCA=ci('CA FIN');
       const iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH'),iLo=ci('LOA'),iRe=ci('REPRISE'),iJ=ci('NBRE JOUR');
       console.log('Colonnes:',{iV,iF,iM,iMo,iIm,hi});
+      console.log('En-tête complet ligne',hi,':',JSON.stringify(hdr));
+      console.log('Valeur hdr[iF]:',hdr[iF]);
+      // Dump valeurs colonne iF pour les lignes 330-400 (où Python trouve juin)
+      for(let t=330;t<400 && t<rows.length;t++){
+        const valCD = rows[t] ? rows[t][iF] : undefined;
+        const valRaw = rowsRaw[t] ? rowsRaw[t][iF] : undefined;
+        if(valCD || valRaw){
+          console.log(`L${t}: cellDates=${valCD} (${typeof valCD}) | raw=${valRaw} (${typeof valRaw})`);
+        }
+      }
+      console.log('En-tête complet ligne',hi,':',JSON.stringify(hdr));
+      console.log('Valeur hdr[iF]:',hdr[iF]);
       // Test sur les 5 premières lignes
       for(let t=hi+1;t<Math.min(hi+5,rows.length);t++){
         const r=rows[t];
