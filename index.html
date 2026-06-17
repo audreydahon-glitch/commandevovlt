@@ -511,6 +511,11 @@ function importXL(file, moisCible){
         const vnom=String(r[iV]||'').trim().toUpperCase();
         if(!vnom||!VNOMS.includes(vnom))continue;
         if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
+        if(!r[iF]) continue;
+        // Log spécifique pour debug juin
+        if(r[iF] instanceof Date && r[iF].getMonth()===5){
+          console.log('JUIN TROUVÉ:',vnom,r[iF],'getMonth=',r[iF].getMonth());
+        }
         const df=r[iF];if(!df)continue;
         let mois=null,annee=null,dateStr='';
         if(df instanceof Date){
