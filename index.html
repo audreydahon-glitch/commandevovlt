@@ -260,7 +260,8 @@ const VDEF=[
   {nom:'ROUTARD',i:'RO',c:'#0891B2'},
 ];
 const PALETTE_AUTO=['#6D28D9','#B45309','#0F766E','#9D174D','#3730A3','#1B2D5B','#2D7A4F','#7C6A00','#C0392B','#0891B2'];
-const EXCLUS=['ALCOPA','MARCHAND','CESSION','MOTTAS','DIRECTION'];
+const EXCLUS=['ALCOPA','MARCHAND','CESSION'];
+const MASQUES=['MOTTAS','DIRECTION'];
 function vendeurAuto(nom,idx){
   return {nom,i:nom.replace(/[^A-Z]/g,'').slice(0,2)||'??',c:PALETTE_AUTO[idx%PALETTE_AUTO.length],ventes:[]};
 }
@@ -324,7 +325,7 @@ async function sbSave(){
       }
     }
     // Config
-    rows.push({vendeur:'__CFG__',modele:String(S.obj),immat:String(S.mois),client:String(S.annee),
+    rows.push({vendeur:'__CFG__',date:'',modele:String(S.obj),immat:String(S.mois),client:String(S.annee),
       marge:0,myana:'',facture:false,fi:false,mad:false,bulbee:false,coyote:false,protech:false,
       euro:false,cession:false,reprise:false,voe:false,plus120:false,ca:0,
       mois:S.mois,annee:S.annee,mois_cde:S.mois,annee_cde:S.annee});
@@ -397,7 +398,7 @@ function rProg(){
 }
 
 function rCards(){
-  document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>{
+  document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>({v,i})).filter(o=>!MASQUES.includes(o.v.nom)).map(({v,i})=>{
     const vm=vCdeV(i),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
     return`<div class="vc"><div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
     <div class="vsg">
@@ -429,7 +430,7 @@ function rCumul(){
 }
 
 function rVentes(){
-  document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>{
+  document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>({v,vi})).filter(o=>!MASQUES.includes(o.v.nom)).map(({v,vi})=>{
     const vm=vCdeV(vi),mg=vm.reduce((s,x)=>s+(x.marge||0),0);
     const rows=vm.map(vt=>{
       const gi=S.vendeurs[vi].ventes.indexOf(vt);
@@ -537,8 +538,7 @@ function importXL(file, moisCible){
       } else {
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!x.facture);
       }
-      const existants=new Set(S.vendeurs.flatMap(v=>v.ventes.map(x=>x.immat)));
-      let nb=0,nbAnnul=0,nbDup=0,nbCandidats=0;
+      let nb=0,nbAnnul=0,nbDup=0,nbCandidats=0,nbMaj=0;
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnom=String(r[iV]||'').trim().toUpperCase();
@@ -589,24 +589,42 @@ function importXL(file, moisCible){
         } else if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
-        if(immat&&existants.has(immat)){nbDup++;console.log(`Ignoré (doublon immat déjà présent) L${i}: immat="${immat}" vendeur="${vnom}"`);continue;}
+        const venteData={
+          date:dateStr,modele:String(r[iMo]||'').trim(),immat,client:String(r[iCl]||'').trim(),
+          marge:Math.round(mg*100)/100,myana:'',facture:true,
+          fi:r[iFI]===1,mad:r[iAd]===1,bulbee:r[iBu]===1,coyote:r[iCo]===1,protech:r[iPr]===1,euro:r[iEu]===1,
+          cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
+          plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
+        };
+        // Chercher si ce véhicule (immat) existe déjà ailleurs dans les données (commande en attente OU déjà facturé)
+        let existingVend=null,existingIdx=-1;
+        if(immat){
+          for(const v of S.vendeurs){
+            const idx=v.ventes.findIndex(x=>x.immat===immat);
+            if(idx>=0){existingVend=v;existingIdx=idx;break;}
+          }
+        }
+        if(existingVend){
+          if(existingVend.ventes[existingIdx].facture){
+            nbDup++;console.log(`Ignoré (déjà facturé) L${i}: immat="${immat}" vendeur="${vnom}"`);continue;
+          }
+          // Commande en attente -> on la transforme en vente facturée (on garde le vendeur d'origine)
+          existingVend.ventes[existingIdx]=venteData;
+          nbMaj++;nb++;
+          console.log(`Mise à jour (commande -> facturée) L${i}: immat="${immat}" vendeur="${existingVend.nom}"`);
+          continue;
+        }
         let vend=S.vendeurs.find(v=>v.nom===vnom);
         if(!vend){
           vend=vendeurAuto(vnom,S.vendeurs.length);
           S.vendeurs.push(vend);
         }
         if(vend){
-          vend.ventes.push({
-            date:dateStr,modele:String(r[iMo]||'').trim(),immat,client:String(r[iCl]||'').trim(),
-            marge:Math.round(mg*100)/100,myana:'',facture:true,
-            fi:r[iFI]===1,mad:r[iAd]===1,bulbee:r[iBu]===1,coyote:r[iCo]===1,protech:r[iPr]===1,euro:r[iEu]===1,
-            cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
-            plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
-          });
-          if(immat)existants.add(immat);nb++;
+          vend.ventes.push(venteData);
+          nb++;
         }
       }
-      console.log(`Résumé import: candidats(mois cible)=${nbCandidats} importés=${nb} doublons ignorés=${nbDup} annulations ignorées=${nbAnnul}`);
+      console.log(`Résumé import: candidats(mois cible)=${nbCandidats} importés=${nb} (dont mis à jour depuis une commande=${nbMaj}) doublons déjà facturés ignorés=${nbDup} annulations ignorées=${nbAnnul}`);
       render();await saveAll();
       alert('✅ '+nb+' vente'+(nb>1?'s':'')+' importée'+(nb>1?'s':''));
     }catch(err){alert('Erreur: '+err.message);}
