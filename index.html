@@ -502,8 +502,14 @@ function importXL(file, moisCible){
       const ws=wb.Sheets[wb.SheetNames.find(n=>n.trim().toUpperCase()==='VO')||wb.SheetNames[0]];
       if(!ws){alert('Feuille VO introuvable');return;}
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
-      const rowsRaw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
-      console.log('Total lignes (cellDates):',rows.length,'Total lignes (raw):',rowsRaw.length);
+      // IMPORTANT : on relit le classeur SANS cellDates pour obtenir les vrais numéros de série Excel.
+      // (Avec cellDates:true au niveau du classeur, l'option raw:true de sheet_to_json ne "défait" pas
+      // la conversion en Date — on obtenait donc toujours des objets Date, jamais des nombres, ce qui
+      // empêchait le chemin de calcul fiable via SSF.parse_date_code et faisait dériver certaines dates
+      // d'un jour, par ex. juin -> 31 mai 23:59:59, à cause de l'imprécision flottante.)
+      const wbRaw=XLSX.read(e.target.result,{type:'array',cellDates:false});
+      const wsRaw=wbRaw.Sheets[wbRaw.SheetNames.find(n=>n.trim().toUpperCase()==='VO')||wbRaw.SheetNames[0]];
+      const rowsRaw=XLSX.utils.sheet_to_json(wsRaw,{header:1,defval:null,raw:true});
       let hi=-1;
       for(let i=0;i<rows.length;i++){if(rows[i]&&rows[i].some(c=>c&&String(c).includes('DATE CDE'))){hi=i;break;}}
       if(hi<0){alert('En-tête non trouvé');return;}
@@ -514,24 +520,7 @@ function importXL(file, moisCible){
       const iCo=ci('COYOTE'),iFI=ci('FI '),iAN=ci('ANNULATION'),iCA=ci('CA FIN');
       const iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH'),iLo=ci('LOA'),iRe=ci('REPRISE'),iJ=ci('NBRE JOUR');
       console.log('Colonnes:',{iV,iF,iM,iMo,iIm,hi});
-      // Dump direct des lignes 375-400 (où Python trouve les vraies factures CHAUMONT/juin)
-      for(let t=375;t<400 && t<rows.length;t++){
-        const r=rows[t];if(!r)continue;
-        const rRaw=rowsRaw[t];
-        console.log(`L${t}: immat="${r[iIm]}" vendeur="${r[iV]}" dateF(CD)=${r[iF]} (${typeof r[iF]}) dateF(raw)=${rRaw?rRaw[iF]:'?'} (${rRaw?typeof rRaw[iF]:'?'})`);
-      }
       const VNOMS=S.vendeurs.map(v=>v.nom);
-      let totalJuin=0,totalJuinRaw=0;
-      for(let i=hi+1;i<rows.length;i++){
-        const rr=rows[i];if(!rr)continue;
-        if(rr[iF] instanceof Date && rr[iF].getMonth()===5) totalJuin++;
-        const rrR = rowsRaw[i];
-        if(rrR && typeof rrR[iF]==='number'){
-          const p = XLSX.SSF.parse_date_code(rrR[iF]);
-          if(p && p.m===6) totalJuinRaw++;
-        }
-      }
-      console.log('TOTAL lignes avec dateF en juin (cellDates):', totalJuin, '| (raw via SSF):', totalJuinRaw);
       // Supprimer les facturées existantes si import mensuel
       if(moisCible!==null){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
@@ -580,7 +569,7 @@ function importXL(file, moisCible){
           }
         }
         if(mois===null)continue;
-        if(moisCible!==null&&(mois!==moisCible||annee!==S.annee)){console.log(`Ignoré: ${r[iV]} mois=${mois} moisCible=${moisCible}`);continue;}
+        if(moisCible!==null&&(mois!==moisCible||annee!==S.annee))continue;
         const dcRaw = rowsRaw[i] ? rowsRaw[i][0] : null;
         const dc=r[0];let moisCde=mois,anneeCde=annee;
         if(typeof dcRaw==='number'){
