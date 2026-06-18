@@ -260,6 +260,7 @@ const VDEF=[
   {nom:'ROUTARD',i:'RO',c:'#0891B2'},
 ];
 const PALETTE_AUTO=['#6D28D9','#B45309','#0F766E','#9D174D','#3730A3','#1B2D5B','#2D7A4F','#7C6A00','#C0392B','#0891B2'];
+const EXCLUS=['ALCOPA','MARCHAND','CESSION','MOTTAS','DIRECTION'];
 function vendeurAuto(nom,idx){
   return {nom,i:nom.replace(/[^A-Z]/g,'').slice(0,2)||'??',c:PALETTE_AUTO[idx%PALETTE_AUTO.length],ventes:[]};
 }
@@ -281,7 +282,7 @@ async function sbLoad(){
     const cfg = rows.find(r=>r.vendeur==='__CFG__');
     if(cfg){S.obj=parseInt(cfg.modele)||50;S.mois=parseInt(cfg.immat)||5;S.annee=parseInt(cfg.client)||2026;}
     // Tous les vendeurs présents dans les données + ceux de VDEF (même sans vente, pour les garder visibles)
-    const vNoms = [...new Set(rows.filter(r=>r.vendeur&&r.vendeur!=='__CFG__').map(r=>r.vendeur))];
+    const vNoms = [...new Set(rows.filter(r=>r.vendeur&&r.vendeur!=='__CFG__'&&!EXCLUS.includes(r.vendeur)).map(r=>r.vendeur))];
     for(const v of VDEF) if(!vNoms.includes(v.nom)) vNoms.push(v.nom);
     S.vendeurs = vNoms.map((nom,idx)=>{
       const base = VDEF.find(v=>v.nom===nom);
@@ -530,7 +531,6 @@ function importXL(file, moisCible){
       const iCo=ci('COYOTE'),iFI=ci('FI '),iAN=ci('ANNULATION'),iCA=ci('CA FIN');
       const iEu=ci('EURODATACAR'),iBu=ci('BULB'),iPr=ci('PROTECH'),iLo=ci('LOA'),iRe=ci('REPRISE'),iJ=ci('NBRE JOUR');
       console.log('Colonnes:',{iV,iF,iM,iMo,iIm,hi});
-      const EXCLUS=['ALCOPA','MARCHAND','CESSION'];
       // Supprimer les facturées existantes si import mensuel
       if(moisCible!==null){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
@@ -538,12 +538,12 @@ function importXL(file, moisCible){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!x.facture);
       }
       const existants=new Set(S.vendeurs.flatMap(v=>v.ventes.map(x=>x.immat)));
-      let nb=0;
+      let nb=0,nbAnnul=0,nbDup=0,nbCandidats=0;
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnom=String(r[iV]||'').trim().toUpperCase();
         if(!vnom||EXCLUS.includes(vnom))continue;
-        if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
+        if(r[iAN]&&String(r[iAN]).trim()!==''){nbAnnul++;console.log(`Ignoré (annulation) L${i}: immat="${r[iIm]}" vendeur="${vnom}" annulation="${r[iAN]}"`);continue;}
         const dfRaw = rowsRaw[i] ? rowsRaw[i][iF] : null;
         const df=r[iF];if(!df && !dfRaw)continue;
         let mois=null,annee=null,dateStr='';
@@ -580,6 +580,7 @@ function importXL(file, moisCible){
         }
         if(mois===null)continue;
         if(moisCible!==null&&(mois!==moisCible||annee!==S.annee))continue;
+        nbCandidats++;
         const dcRaw = rowsRaw[i] ? rowsRaw[i][0] : null;
         const dc=r[0];let moisCde=mois,anneeCde=annee;
         if(typeof dcRaw==='number'){
@@ -588,7 +589,7 @@ function importXL(file, moisCible){
         } else if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
-        if(immat&&existants.has(immat))continue;
+        if(immat&&existants.has(immat)){nbDup++;console.log(`Ignoré (doublon immat déjà présent) L${i}: immat="${immat}" vendeur="${vnom}"`);continue;}
         let vend=S.vendeurs.find(v=>v.nom===vnom);
         if(!vend){
           vend=vendeurAuto(vnom,S.vendeurs.length);
@@ -605,6 +606,7 @@ function importXL(file, moisCible){
           if(immat)existants.add(immat);nb++;
         }
       }
+      console.log(`Résumé import: candidats(mois cible)=${nbCandidats} importés=${nb} doublons ignorés=${nbDup} annulations ignorées=${nbAnnul}`);
       render();await saveAll();
       alert('✅ '+nb+' vente'+(nb>1?'s':'')+' importée'+(nb>1?'s':''));
     }catch(err){alert('Erreur: '+err.message);}
