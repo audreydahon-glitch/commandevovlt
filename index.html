@@ -340,13 +340,15 @@ function vCdeV(vi){return S.vendeurs[vi].ventes.filter(x=>parseInt(x.moisCde??x.
 
 // ── RENDER ──
 function rAnnual(){
-  const t=S.vendeurs.flatMap(v=>v.ventes).filter(x=>x.facture);
+  const t=S.vendeurs.flatMap(v=>v.ventes).filter(x=>x.facture&&parseInt(x.annee)===S.annee);
   const g=k=>t.filter(x=>x[k]).length;
+  document.querySelector('.annual-label h3').textContent='Cumul annuel '+S.annee;
+  document.querySelector('.annual-label p').textContent='Toutes activités · '+S.annee;
   document.getElementById('chips').innerHTML=[
     {v:t.length,l:'VENTES',a:true},{v:g('fi'),l:'FI'},{v:g('mad'),l:'MAD'},
     {v:g('coyote'),l:'COYOTE'},{v:g('protech'),l:'PROTECH'},{v:g('bulbee'),l:'BULBEE'},
     {v:g('euro'),l:'EURODATA'},{v:g('reprise'),l:'REPRISES'},{v:g('cession'),l:'CESSION'},
-    {v:g('voe'),l:'VOE'},{v:S.vendeurs.flatMap(v=>v.ventes).filter(x=>x.plus120).length,l:'+120J',r:true},
+    {v:g('voe'),l:'VOE'},{v:g('plus120'),l:'+120J',r:true},
   ].map(c=>`<div class="chip${c.a?' active':''}${c.r?' red':''}"><div class="chip-v">${c.v}</div><div class="chip-l">${c.l}</div></div>`).join('');
   document.getElementById('moisLbl').textContent=MNOMS[S.mois]+' '+S.annee;
 }
@@ -392,7 +394,7 @@ function rCards(){
 }
 
 function rCumul(){
-  const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
+  const vm=vFact(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi&&x.facture).reduce((s,x)=>s+(x.ca||0),0);
   document.getElementById('cgrid').innerHTML=[
     {v:vm.length,l:'VENTES'},{v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
