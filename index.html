@@ -478,6 +478,7 @@ function cif(e){if(e.target.id==='ov')cov();}
 document.querySelectorAll('.ck input').forEach(cb=>cb.addEventListener('change',()=>cb.closest('.ck').classList.toggle('on',cb.checked)));
 
 // ── IMPORT EXCEL ──
+function fixXLDate(d){return new Date(Math.round(d.getTime()/60000)*60000);}
 function importXL(file, moisCible){
   const reader=new FileReader();
   reader.onload=async e=>{
@@ -503,12 +504,6 @@ function importXL(file, moisCible){
         console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
-      let totalJuin=0;
-      for(let i=hi+1;i<rows.length;i++){
-        const rr=rows[i];if(!rr)continue;
-        if(rr[iF] instanceof Date && rr[iF].getMonth()===5) totalJuin++;
-      }
-      console.log('TOTAL lignes avec dateF en juin (avant filtres vendeur/annul):', totalJuin);
       // Supprimer les facturées existantes si import mensuel
       if(moisCible!==null){
         for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
@@ -523,16 +518,13 @@ function importXL(file, moisCible){
         if(!vnom||!VNOMS.includes(vnom))continue;
         if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
         if(!r[iF]) continue;
-        // Log spécifique pour debug juin
-        if(r[iF] instanceof Date && r[iF].getMonth()===5){
-          console.log('JUIN TROUVÉ:',vnom,r[iF],'getMonth=',r[iF].getMonth());
-        }
         const df=r[iF];if(!df)continue;
         let mois=null,annee=null,dateStr='';
         if(df instanceof Date){
-          mois=df.getMonth();annee=df.getFullYear();
+          const dfx=fixXLDate(df);
+          mois=dfx.getMonth();annee=dfx.getFullYear();
           const jn=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-          dateStr=jn[df.getDay()]+' '+df.getDate();
+          dateStr=jn[dfx.getDay()]+' '+dfx.getDate();
         } else if(typeof df==='string'){
           const m=df.match(/(\d{4})-(\d{2})-(\d{2})/);
           if(m){mois=parseInt(m[2])-1;annee=parseInt(m[1]);dateStr=m[3]+'/'+m[2];}
@@ -546,7 +538,7 @@ function importXL(file, moisCible){
         if(mois===null)continue;
         if(moisCible!==null&&(mois!==moisCible||annee!==S.annee)){console.log(`Ignoré: ${r[iV]} mois=${mois} moisCible=${moisCible}`);continue;}
         const dc=r[0];let moisCde=mois,anneeCde=annee;
-        if(dc instanceof Date){moisCde=dc.getMonth();anneeCde=dc.getFullYear();}
+        if(dc instanceof Date){const dcx=fixXLDate(dc);moisCde=dcx.getMonth();anneeCde=dcx.getFullYear();}
         else if(typeof dc==='number'){
           const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(dc));
           moisCde=d.getUTCMonth();anneeCde=d.getUTCFullYear();
