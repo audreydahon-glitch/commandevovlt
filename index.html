@@ -394,7 +394,7 @@ function rCards(){
 }
 
 function rCumul(){
-  const vm=vFact(),g=k=>vm.filter(x=>x[k]).length;
+  const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi&&x.facture).reduce((s,x)=>s+(x.ca||0),0);
   document.getElementById('cgrid').innerHTML=[
     {v:vm.length,l:'VENTES'},{v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
