@@ -353,7 +353,7 @@ function rAnnual(){
   document.getElementById('moisLbl').textContent=MNOMS[S.mois]+' '+S.annee;
 }
 
-function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;rProg();}
+async function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;rProg();await saveAll();}
 function rProg(){
   const vm=vFact(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
   const jo=joOuv(S.annee,S.mois);
