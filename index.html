@@ -281,8 +281,8 @@ async function sbLoad(){
 
 async function sbSave(){
   try{
-    // Supprimer
-    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=gte.0`,{method:'DELETE',headers:SB_HDR});
+    // Supprimer uniquement les lignes de ventes (jamais la ligne __CFG__, gérée séparément par updObj)
+    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=neq.__CFG__`,{method:'DELETE',headers:SB_HDR});
     // Construire les lignes
     const rows = [];
     for(const v of S.vendeurs){
@@ -298,11 +298,6 @@ async function sbSave(){
         });
       }
     }
-    // Config
-    rows.push({vendeur:'__CFG__',modele:String(S.obj),immat:String(S.mois),client:String(S.annee),
-      marge:0,myana:'',facture:false,fi:false,mad:false,bulbee:false,coyote:false,protech:false,
-      euro:false,cession:false,reprise:false,voe:false,plus120:false,ca:0,
-      mois:S.mois,annee:S.annee,mois_cde:S.mois,annee_cde:S.annee});
     // Insérer par lots
     for(let i=0;i<rows.length;i+=100){
       const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{
@@ -329,6 +324,7 @@ async function resetAll(){
   const n=new Date();S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
   render();
   await saveAll();
+  await saveCfg();
 }
 
 // ── UTILITAIRES ──
@@ -353,7 +349,32 @@ function rAnnual(){
   document.getElementById('moisLbl').textContent=MNOMS[S.mois]+' '+S.annee;
 }
 
-async function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;rProg();await saveAll();}
+async function saveCfg(){
+  const sst=document.getElementById('sst');
+  sst.textContent='Sauvegarde...';
+  try{
+    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=eq.__CFG__`,{method:'DELETE',headers:SB_HDR});
+    const cfgRow={vendeur:'__CFG__',modele:String(S.obj),immat:String(S.mois),client:String(S.annee),
+      marge:0,myana:'',facture:false,fi:false,mad:false,bulbee:false,coyote:false,protech:false,
+      euro:false,cession:false,reprise:false,voe:false,plus120:false,ca:0,
+      mois:S.mois,annee:S.annee,mois_cde:S.mois,annee_cde:S.annee};
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{
+      method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},
+      body:JSON.stringify([cfgRow])
+    });
+    sst.textContent = r.ok ? 'Sauvegardé le '+new Date().toLocaleTimeString('fr-FR') : '⚠️ Erreur de sauvegarde';
+    return r.ok;
+  }catch(e){
+    console.error('saveCfg exception:',e);
+    sst.textContent='⚠️ Erreur de sauvegarde';
+    return false;
+  }
+}
+async function updObj(){
+  S.obj=parseInt(document.getElementById('oi').value)||1;
+  rProg();
+  await saveCfg();
+}
 function rProg(){
   const vm=vFact(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
   const jo=joOuv(S.annee,S.mois);
