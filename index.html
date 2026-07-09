@@ -60,18 +60,23 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .dlbl2{font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-top:1px}
 .stitle{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#999;margin-bottom:10px;margin-top:18px;display:flex;align-items:center;gap:8px}
 .stitle::after{content:'';flex:1;height:1px;background:#E5E5E0}
-.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-.vc{background:#fff;border:1px solid #E5E5E0;border-radius:12px;overflow:hidden}
-.vch{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid #E5E5E0}
-.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
-.vname{font-size:13px;font-weight:600;cursor:pointer}
-.vname:hover{color:#1B2D5B;text-decoration:underline}
-.vmarge{font-size:10px;color:#999;margin-top:1px}
-.vsg{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#E5E5E0}
-.vs{background:#fff;padding:9px 5px;text-align:center}
-.vsv{font-size:16px;font-weight:700}
-.vsv.pos{color:#2D7A4F}.vsv.red{color:#C0392B}
-.vsl{font-size:7px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-top:2px}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.vc{background:#fff;border:1px solid #E5E5E0;border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,20,10,.04);transition:box-shadow .18s ease,transform .18s ease}
+.vc:hover{box-shadow:0 8px 20px rgba(20,20,10,.09);transform:translateY(-2px)}
+.vch{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
+.av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px rgba(0,0,0,.045)}
+.vname{font-size:14px;font-weight:700;cursor:pointer;letter-spacing:-.01em}
+.vname:hover{text-decoration:underline}
+.vmarge{font-size:10px;color:#999;margin-top:1px;font-weight:500}
+.vhero{display:flex;align-items:baseline;gap:7px;padding:2px 16px 12px}
+.vheronum{font-size:32px;font-weight:800;color:#1B2D5B;line-height:1;letter-spacing:-.02em}
+.vheronum.zero{color:#D6D6CE}
+.vherolbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#AFAFA5}
+.vchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 15px}
+.vchip{display:flex;align-items:center;gap:4px;background:#F6F6F2;border-radius:20px;padding:4px 10px;font-size:10px;font-weight:600;color:#C4C4BA;transition:background .15s,color .15s}
+.vchip b{font-size:11px;font-weight:800}
+.vchip.on{background:#EAF0FF;color:#1B2D5B}
+.vchip.on.red{background:#FCEAEA;color:#C0392B}
 .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(75px,1fr));gap:7px}
 .cs{background:#fff;border:1px solid #E5E5E0;border-radius:9px;padding:10px 6px;text-align:center;position:relative;overflow:hidden}
 .cs::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
@@ -403,21 +408,15 @@ function rProg(){
 
 function rCards(){
   const CARTES_MASQUEES = ['MOTTAS','BDC']; // pas de carte individuelle, mais ventes toujours comptées dans les cumuls
+  const chip=(l,v,warn)=>`<div class="vchip${v>0?' on'+(warn?' red':''):''}"><b>${v}</b> ${l}</div>`;
   document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>({v,i})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,i})=>{
     const vm=vCdeV(i),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
-    return`<div class="vc"><div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
-    <div class="vsg">
-      <div class="vs"><div class="vsv${nb>0?' pos':''}">${nb}</div><div class="vsl">VENTES</div></div>
-      <div class="vs"><div class="vsv">${g('fi')}</div><div class="vsl">FI</div></div>
-      <div class="vs"><div class="vsv">${g('mad')}</div><div class="vsl">MAD</div></div>
-      <div class="vs"><div class="vsv">${g('coyote')}</div><div class="vsl">COYOTE</div></div>
-      <div class="vs"><div class="vsv">${g('protech')}</div><div class="vsl">PROTECH</div></div>
-      <div class="vs"><div class="vsv">${g('bulbee')}</div><div class="vsl">BULBEE</div></div>
-      <div class="vs"><div class="vsv">${g('euro')}</div><div class="vsl">EURODATA</div></div>
-      <div class="vs"><div class="vsv">${g('cession')}</div><div class="vsl">CESSION</div></div>
-      <div class="vs"><div class="vsv">${g('reprise')}</div><div class="vsl">REPRISES</div></div>
-      <div class="vs"><div class="vsv">${g('voe')}</div><div class="vsl">VOE</div></div>
-      <div class="vs"><div class="vsv${g('plus120')>0?' red':''}">${g('plus120')}</div><div class="vsl">+120J</div></div>
+    return`<div class="vc" style="border-top:3px solid ${v.c}">
+    <div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
+    <div class="vhero"><div class="vheronum${nb===0?' zero':''}">${nb}</div><div class="vherolbl">ventes ce mois</div></div>
+    <div class="vchips">
+      ${chip('FI',g('fi'))}${chip('MAD',g('mad'))}${chip('Coyote',g('coyote'))}${chip('Protech',g('protech'))}${chip('Bulbee',g('bulbee'))}
+      ${chip('Eurodata',g('euro'))}${chip('Cession',g('cession'))}${chip('Reprises',g('reprise'))}${chip('VOE',g('voe'))}${chip('+120J',g('plus120'),true)}
     </div></div>`;
   }).join('');
 }
