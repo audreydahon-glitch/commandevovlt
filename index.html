@@ -424,7 +424,7 @@ function rCards(){
 function rCumul(){
   const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi&&x.facture).reduce((s,x)=>s+(x.ca||0),0);
-  const mgPrev=vm.reduce((s,x)=>s+(x.marge||0),0);
+  const mgPrev=vm.filter(x=>!x.facture).reduce((s,x)=>s+(x.marge||0),0);
   document.getElementById('cgrid').innerHTML=[
     {v:vm.length,l:'VENTES'},{v:fE(mgPrev),l:'MARGE PRÉV.',sm:true},
     {v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
@@ -436,7 +436,8 @@ function rCumul(){
 }
 
 function rVentes(){
-  document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>{
+  const CARTES_MASQUEES = ['MOTTAS','BDC'];
+  document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>({v,vi})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,vi})=>{
     const vm=vCdeV(vi),mg=vm.reduce((s,x)=>s+(x.marge||0),0);
     const rows=vm.map(vt=>{
       const gi=S.vendeurs[vi].ventes.indexOf(vt);
