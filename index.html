@@ -402,7 +402,8 @@ function rProg(){
 }
 
 function rCards(){
-  document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>{
+  const CARTES_MASQUEES = ['MOTTAS','BDC']; // pas de carte individuelle, mais ventes toujours comptées dans les cumuls
+  document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>({v,i})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,i})=>{
     const vm=vCdeV(i),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
     return`<div class="vc"><div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
     <div class="vsg">
