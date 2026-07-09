@@ -424,8 +424,10 @@ function rCards(){
 function rCumul(){
   const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi&&x.facture).reduce((s,x)=>s+(x.ca||0),0);
+  const mgPrev=vm.reduce((s,x)=>s+(x.marge||0),0);
   document.getElementById('cgrid').innerHTML=[
-    {v:vm.length,l:'VENTES'},{v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
+    {v:vm.length,l:'VENTES'},{v:fE(mgPrev),l:'MARGE PRÉV.',sm:true},
+    {v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
     {v:g('mad'),l:'MAD'},{v:g('fi'),l:'FI'},
     {v:ca>0?Math.round(ca).toLocaleString('fr-FR')+' €':'—',l:'DÉCAISS. FI',sm:true},
     {v:g('coyote'),l:'COYOTE'},{v:g('protech'),l:'PROTECH'},{v:g('bulbee'),l:'BULBEE'},
