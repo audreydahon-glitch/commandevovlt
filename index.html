@@ -222,6 +222,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
           <label class="ck"><input type="checkbox" id="xre"> Reprise</label>
           <label class="ck"><input type="checkbox" id="xvo"> VOE</label>
           <label class="ck"><input type="checkbox" id="xpl"> +120J</label>
+          <label class="ck" style="color:#C0392B"><input type="checkbox" id="xan"> Annulation</label>
         </div>
       </div>
     </div>
@@ -282,6 +283,7 @@ async function sbLoad(){
         fi:r.fi===true||r.fi==='true',mad:r.mad===true||r.mad==='true',bulbee:r.bulbee===true||r.bulbee==='true',coyote:r.coyote===true||r.coyote==='true',
         protech:r.protech===true||r.protech==='true',euro:r.euro===true||r.euro==='true',cession:r.cession===true||r.cession==='true',
         reprise:r.reprise===true||r.reprise==='true',voe:r.voe===true||r.voe==='true',plus120:r.plus120===true||r.plus120==='true',ca:parseFloat(r.ca)||0,
+        annulation:r.annulation===true||r.annulation==='true',
         mois:parseInt(r.mois)||0,annee:parseInt(r.annee)||2026,
         moisCde:parseInt(r.mois_cde)>=0?parseInt(r.mois_cde):parseInt(r.mois)||0,
         anneeCde:parseInt(r.annee_cde)||parseInt(r.annee)||2026,
@@ -305,6 +307,7 @@ async function sbSave(){
           facture:!!vt.facture,fi:!!vt.fi,mad:!!vt.mad,bulbee:!!vt.bulbee,
           coyote:!!vt.coyote,protech:!!vt.protech,euro:!!vt.euro,cession:!!vt.cession,
           reprise:!!vt.reprise,voe:!!vt.voe,plus120:!!vt.plus120,ca:vt.ca||0,
+          annulation:!!vt.annulation,
           mois:vt.mois||0,annee:vt.annee||2026,mois_cde:vt.moisCde||vt.mois||0,
           annee_cde:vt.anneeCde||vt.annee||2026,
         });
@@ -348,7 +351,7 @@ function vCdeV(vi){return S.vendeurs[vi].ventes.filter(x=>parseInt(x.moisCde??x.
 
 // ── RENDER ──
 function rAnnual(){
-  const t=S.vendeurs.flatMap(v=>v.ventes).filter(x=>parseInt(x.anneeCde??x.annee)===S.annee);
+  const t=S.vendeurs.flatMap(v=>v.ventes).filter(x=>!x.annulation&&parseInt(x.anneeCde??x.annee)===S.annee);
   const g=k=>t.filter(x=>x[k]).length;
   document.querySelector('.annual-label h3').textContent='Cumul annuel '+S.annee;
   document.querySelector('.annual-label p').textContent='Toutes activités · '+S.annee;
@@ -388,7 +391,7 @@ async function updObj(){
   await saveCfg();
 }
 function rProg(){
-  const vm=vFact(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
+  const vm=vFact().filter(x=>!x.annulation),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
   const jo=joOuv(S.annee,S.mois);
   document.getElementById('oi').value=obj;
   document.getElementById('oc').textContent=nb;
@@ -410,7 +413,7 @@ function rCards(){
   const CARTES_MASQUEES = ['MOTTAS','BDC']; // pas de carte individuelle, mais ventes toujours comptées dans les cumuls
   const chip=(l,v,warn)=>`<div class="vchip${v>0?' on'+(warn?' red':''):''}"><b>${v}</b> ${l}</div>`;
   document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>({v,i})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,i})=>{
-    const vm=vCdeV(i),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
+    const vm=vCdeV(i).filter(x=>!x.annulation),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
     return`<div class="vc" style="border-top:3px solid ${v.c}">
     <div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
     <div class="vhero"><div class="vheronum${nb===0?' zero':''}">${nb}</div><div class="vherolbl">ventes ce mois</div></div>
@@ -422,7 +425,7 @@ function rCards(){
 }
 
 function rCumul(){
-  const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
+  const vm=vCde().filter(x=>!x.annulation),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi&&x.facture).reduce((s,x)=>s+(x.ca||0),0);
   const mgPrev=vm.filter(x=>!x.facture).reduce((s,x)=>s+(x.marge||0),0);
   document.getElementById('cgrid').innerHTML=[
@@ -443,7 +446,8 @@ function rVentes(){
       const gi=S.vendeurs[vi].ventes.indexOf(vt);
       const mb=!vt.marge||vt.marge===0?`<span class="mb mbz">0€</span>`:vt.marge<0?`<span class="mb mbn">${fE(vt.marge)}</span>`:`<span class="mb mbp">${fE(vt.marge)}</span>`;
       const my=vt.myana==='valide'?'<span class="sv">✓ Validé</span>':vt.myana==='attente'?'<span class="sa">⏳ Attente</span>':'<span class="sn">—</span>';
-      return`<tr><td><span class="dot${vt.facture?'':' p'}"></span>${vt.date||'—'}</td><td><b>${vt.modele||'—'}</b></td><td style="font-family:monospace;font-size:10px;color:#999">${vt.immat||'—'}</td><td>${vt.client||'—'}</td><td>${mb}</td><td>${my}</td><td>${vt.facture?'<span class="sv">Oui</span>':'<span class="sn">—</span>'}</td><td><button class="bmod" onclick="oEdit(${vi},${gi})">Modifier</button></td></tr>`;
+      const annBadge=vt.annulation?' <span class="mb mbn" style="background:#C0392B;color:#fff">Annulée</span>':'';
+      return`<tr${vt.annulation?' style="opacity:.55"':''}><td><span class="dot${vt.facture?'':' p'}"></span>${vt.date||'—'}</td><td><b>${vt.modele||'—'}</b>${annBadge}</td><td style="font-family:monospace;font-size:10px;color:#999">${vt.immat||'—'}</td><td>${vt.client||'—'}</td><td>${mb}</td><td>${my}</td><td>${vt.facture?'<span class="sv">Oui</span>':'<span class="sn">—</span>'}</td><td><button class="bmod" onclick="oEdit(${vi},${gi})">Modifier</button></td></tr>`;
     }).join('');
     return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.nom}</b><div class="vshst"><span>${fE(mg)}</span><span>${vm.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${vm.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>'}</div>`;
   }).join('');
@@ -470,7 +474,7 @@ function oEdit(vi,idx){
   document.getElementById('fmg').value=vt.marge||'';document.getElementById('fmy').value=vt.myana||'';
   document.getElementById('ffa').value=vt.facture?'oui':'';
   sc('xfi',vt.fi);sc('xma',vt.mad);sc('xbu',vt.bulbee);sc('xco',vt.coyote);sc('xpr',vt.protech);
-  sc('xeu',vt.euro);sc('xce',vt.cession);sc('xre',vt.reprise);sc('xvo',vt.voe);sc('xpl',vt.plus120);
+  sc('xeu',vt.euro);sc('xce',vt.cession);sc('xre',vt.reprise);sc('xvo',vt.voe);sc('xpl',vt.plus120);sc('xan',vt.annulation);
   document.getElementById('bdel').style.display='block';
   document.getElementById('ov').classList.add('open');
 }
@@ -487,6 +491,7 @@ async function savV(){
     protech:document.getElementById('xpr').checked,euro:document.getElementById('xeu').checked,
     cession:document.getElementById('xce').checked,reprise:document.getElementById('xre').checked,
     voe:document.getElementById('xvo').checked,plus120:document.getElementById('xpl').checked,
+    annulation:document.getElementById('xan').checked,
     ca:0,mois:S.mois,annee:S.annee,moisCde:S.mois,anneeCde:S.annee,
   };
   const idx=document.getElementById('eidx').value;
