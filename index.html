@@ -441,7 +441,7 @@ function rCumul(){
 function rVentes(){
   const CARTES_MASQUEES = ['MOTTAS','BDC'];
   document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>({v,vi})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,vi})=>{
-    const vm=vCdeV(vi),mg=vm.reduce((s,x)=>s+(x.marge||0),0);
+    const vm=vCdeV(vi),vmActives=vm.filter(x=>!x.annulation),mg=vmActives.reduce((s,x)=>s+(x.marge||0),0);
     const rows=vm.map(vt=>{
       const gi=S.vendeurs[vi].ventes.indexOf(vt);
       const mb=!vt.marge||vt.marge===0?`<span class="mb mbz">0€</span>`:vt.marge<0?`<span class="mb mbn">${fE(vt.marge)}</span>`:`<span class="mb mbp">${fE(vt.marge)}</span>`;
@@ -449,7 +449,7 @@ function rVentes(){
       const annBadge=vt.annulation?' <span class="mb mbn" style="background:#C0392B;color:#fff">Annulée</span>':'';
       return`<tr${vt.annulation?' style="opacity:.55"':''}><td><span class="dot${vt.facture?'':' p'}"></span>${vt.date||'—'}</td><td><b>${vt.modele||'—'}</b>${annBadge}</td><td style="font-family:monospace;font-size:10px;color:#999">${vt.immat||'—'}</td><td>${vt.client||'—'}</td><td>${mb}</td><td>${my}</td><td>${vt.facture?'<span class="sv">Oui</span>':'<span class="sn">—</span>'}</td><td><button class="bmod" onclick="oEdit(${vi},${gi})">Modifier</button></td></tr>`;
     }).join('');
-    return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.nom}</b><div class="vshst"><span>${fE(mg)}</span><span>${vm.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${vm.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>'}</div>`;
+    return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.nom}</b><div class="vshst"><span>${fE(mg)}</span><span>${vmActives.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${vm.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>'}</div>`;
   }).join('');
 }
 
