@@ -17,6 +17,10 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .page{max-width:1400px;margin:0 auto;padding:20px 16px}
 .card{background:#fff;border:1px solid #E5E5E0;border-radius:12px;padding:16px 20px;margin-bottom:14px}
 .annual-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:8px;margin:14px 0 4px}
+.tabbtn{background:#fff;border:1px solid #E5E5E0;border-radius:20px;padding:8px 16px;font-size:12px;font-weight:700;color:#999;cursor:pointer;transition:all .15s}
+.tabbtn:hover{color:#1B2D5B}
+.tabbtn.active{background:#1B2D5B;border-color:#1B2D5B;color:#fff}
 .annual-label h3{font-size:14px;font-weight:600;min-width:140px}
 .annual-label p{font-size:10px;color:#999;margin-top:1px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
@@ -182,6 +186,11 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
       </div>
     </div>
   </div>
+  <div class="tabs">
+    <button class="tabbtn active" id="tabbtn-mois" onclick="showTab('mois')">📅 Mois en cours</button>
+    <button class="tabbtn" id="tabbtn-annuel" onclick="showTab('annuel')">📊 Cumul annuel par vendeur</button>
+  </div>
+  <div id="tab-mois">
   <div class="stitle">Vendeurs — Cliquer le nom pour renommer</div>
   <div class="vgrid" id="vgrid"></div>
   <div class="stitle">Cumul mensuel — Toutes équipes</div>
@@ -191,6 +200,11 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
     <label class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px">⬆ Importer factures<input type="file" accept=".xlsx,.xls" id="impM" style="display:none"></label>
   </div>
   <div id="vsecs"></div>
+  </div>
+  <div id="tab-annuel" style="display:none">
+    <div class="stitle" id="stitleAnnuel">Cumul annuel par vendeur</div>
+    <div class="vgrid" id="vgridAnnuel"></div>
+  </div>
 </div>
 <div class="ov" id="ov" onclick="cif(event)">
   <div class="modal">
@@ -424,6 +438,29 @@ function rCards(){
   }).join('');
 }
 
+function rCardsAnnuel(){
+  const CARTES_MASQUEES = ['MOTTAS','BDC'];
+  const chip=(l,v,warn)=>`<div class="vchip${v>0?' on'+(warn?' red':''):''}"><b>${v}</b> ${l}</div>`;
+  document.getElementById('stitleAnnuel').textContent='Cumul annuel par vendeur — '+S.annee;
+  document.getElementById('vgridAnnuel').innerHTML=S.vendeurs.map((v,i)=>({v,i})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,i})=>{
+    const vm=v.ventes.filter(x=>!x.annulation&&parseInt(x.anneeCde??x.annee)===S.annee),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
+    return`<div class="vc" style="border-top:3px solid ${v.c}">
+    <div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
+    <div class="vhero"><div class="vheronum${nb===0?' zero':''}">${nb}</div><div class="vherolbl">ventes cette année</div></div>
+    <div class="vchips">
+      ${chip('FI',g('fi'))}${chip('MAD',g('mad'))}${chip('Coyote',g('coyote'))}${chip('Protech',g('protech'))}${chip('Bulbee',g('bulbee'))}
+      ${chip('Eurodata',g('euro'))}${chip('Cession',g('cession'))}${chip('Reprises',g('reprise'))}${chip('VOE',g('voe'))}${chip('+120J',g('plus120'),true)}
+    </div></div>`;
+  }).join('');
+}
+function showTab(t){
+  document.getElementById('tab-mois').style.display=t==='mois'?'':'none';
+  document.getElementById('tab-annuel').style.display=t==='annuel'?'':'none';
+  document.getElementById('tabbtn-mois').classList.toggle('active',t==='mois');
+  document.getElementById('tabbtn-annuel').classList.toggle('active',t==='annuel');
+  if(t==='annuel') rCardsAnnuel();
+}
+
 function rCumul(){
   const vm=vCde().filter(x=>!x.annulation),g=k=>vm.filter(x=>x[k]).length;
   const mgPrev=vm.filter(x=>!x.facture).reduce((s,x)=>s+(x.marge||0),0);
@@ -601,7 +638,7 @@ function importXL(file, moisCible){
 document.getElementById('impM').addEventListener('change',e=>{if(e.target.files[0])importXL(e.target.files[0],S.mois);e.target.value='';});
 document.getElementById('impA').addEventListener('change',e=>{if(e.target.files[0])importXL(e.target.files[0],null);e.target.value='';});
 
-function render(){rAnnual();rProg();rCards();rCumul();rVentes();}
+function render(){rAnnual();rProg();rCards();rCumul();rVentes();rCardsAnnuel();}
 
 // ── DÉMARRAGE ──
 (async()=>{
