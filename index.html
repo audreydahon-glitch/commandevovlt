@@ -272,14 +272,15 @@ const EXCEL = {"CHAUMONT": [{"date": "Jeu 1", "modele": "SWIFT", "immat": "GW-68
 // ── ÉTAT ──
 const _now = new Date();
 let S = {obj:50, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:[...EXCEL[v.nom]||[]]}))};
+let LOAD_ERROR = false; // true si le chargement initial a échoué : on bloque toute sauvegarde par sécurité
 
 // ── SUPABASE ──
 async function sbLoad(){
   try{
     const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?select=*&order=id`,{headers:SB_HDR});
-    if(!r.ok){console.error('Load error:',r.status);return false;}
+    if(!r.ok){console.error('Load error:',r.status);return 'error';}
     const rows = await r.json();
-    if(!rows||rows.length===0) return false;
+    if(!rows||rows.length===0) return 'empty';
     // Reconstruire S depuis les lignes
     const cfg = rows.find(r=>r.vendeur==='__CFG__');
     // NB: on ne restaure que l'objectif ; le mois/année reste calé sur la date du jour (voir const _now)
@@ -304,14 +305,13 @@ async function sbLoad(){
         anneeCde:parseInt(r.annee_cde)||parseInt(r.annee)||2026,
       }))};
     });
-    return true;
-  }catch(e){console.error('sbLoad exception:',e);return false;}
+    return 'ok';
+  }catch(e){console.error('sbLoad exception:',e);return 'error';}
 }
 
 async function sbSave(){
+  if(LOAD_ERROR){alert('⚠️ Sauvegarde bloquée : les données n\'ont pas pu être chargées correctement au démarrage. Rechargez la page une fois la connexion rétablie avant de continuer.');return false;}
   try{
-    // Supprimer uniquement les lignes de ventes (jamais la ligne __CFG__, gérée séparément par updObj)
-    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=neq.__CFG__`,{method:'DELETE',headers:SB_HDR});
     // Construire les lignes
     const rows = [];
     for(const v of S.vendeurs){
@@ -329,13 +329,28 @@ async function sbSave(){
         });
       }
     }
-    // Insérer par lots
+    // 1) Insérer D'ABORD les nouvelles lignes, en récupérant leurs identifiants
+    const newIds=[];
     for(let i=0;i<rows.length;i+=100){
       const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{
-        method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},
+        method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},
         body:JSON.stringify(rows.slice(i,i+100))
       });
-      if(!r.ok){const t=await r.text();console.error('Insert error:',r.status,t);}
+      if(!r.ok){
+        const t=await r.text();console.error('Insert error:',r.status,t);
+        // Rien n'a été supprimé : les données existantes restent intactes en cas d'échec.
+        return false;
+      }
+      const inserted = await r.json();
+      for(const row of inserted) if(row && row.id!=null) newIds.push(row.id);
+    }
+    // 2) Une fois l'insertion confirmée réussie, supprimer les anciennes lignes
+    //    (jamais __CFG__, jamais les lignes qu'on vient d'insérer)
+    if(newIds.length){
+      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=neq.__CFG__&id=not.in.(${newIds.join(',')})`,{method:'DELETE',headers:SB_HDR});
+    } else if(rows.length===0){
+      // Aucune vente à sauvegarder (cas rare) : on nettoie les anciennes lignes de ventes
+      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=neq.__CFG__`,{method:'DELETE',headers:SB_HDR});
     }
     return true;
   }catch(e){console.error('sbSave exception:',e);return false;}
@@ -381,20 +396,26 @@ function rAnnual(){
 }
 
 async function saveCfg(){
+  if(LOAD_ERROR){alert('⚠️ Sauvegarde bloquée : les données n\'ont pas pu être chargées correctement au démarrage. Rechargez la page une fois la connexion rétablie avant de continuer.');return false;}
   const sst=document.getElementById('sst');
   sst.textContent='Sauvegarde...';
   try{
-    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=eq.__CFG__`,{method:'DELETE',headers:SB_HDR});
     const cfgRow={vendeur:'__CFG__',modele:String(S.obj),immat:String(S.mois),client:String(S.annee),
       marge:0,myana:'',facture:false,fi:false,mad:false,bulbee:false,coyote:false,protech:false,
       euro:false,cession:false,reprise:false,voe:false,plus120:false,ca:0,
       mois:S.mois,annee:S.annee,mois_cde:S.mois,annee_cde:S.annee};
     const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{
-      method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},
+      method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},
       body:JSON.stringify([cfgRow])
     });
-    sst.textContent = r.ok ? 'Sauvegardé le '+new Date().toLocaleTimeString('fr-FR') : '⚠️ Erreur de sauvegarde';
-    return r.ok;
+    if(!r.ok){sst.textContent='⚠️ Erreur de sauvegarde';return false;}
+    const inserted=await r.json();
+    const newId=inserted&&inserted[0]&&inserted[0].id!=null?inserted[0].id:null;
+    if(newId!=null){
+      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?vendeur=eq.__CFG__&id=neq.${newId}`,{method:'DELETE',headers:SB_HDR});
+    }
+    sst.textContent = 'Sauvegardé le '+new Date().toLocaleTimeString('fr-FR');
+    return true;
   }catch(e){
     console.error('saveCfg exception:',e);
     sst.textContent='⚠️ Erreur de sauvegarde';
@@ -577,13 +598,7 @@ function importXL(file, moisCible){
         console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
-      // Supprimer uniquement les factures déjà importées précédemment (jamais les ventes saisies manuellement dans l'appli)
-      if(moisCible!==null){
-        for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.imported&&x.facture&&x.mois===moisCible&&x.annee===S.annee));
-      } else {
-        for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.imported&&x.facture));
-      }
-      // Index de toutes les ventes existantes par plaque, pour pouvoir compléter une commande en attente au lieu de la dupliquer
+      // Aucune suppression : on met à jour une ligne existante (par plaque) ou on ajoute une nouvelle ligne. Jamais de suppression préalable.
       const parImmat=new Map();
       for(const v of S.vendeurs) for(const x of v.ventes) if(x.immat) parImmat.set(x.immat, x);
       let nb=0, nbMaj=0;
@@ -653,12 +668,12 @@ function importXL(file, moisCible){
       render();await saveAll();
       let msg='✅ '+nb+' vente'+(nb>1?'s':'')+' importée'+(nb>1?'s':'');
       if(nbMaj) msg+='\n🔄 '+nbMaj+' commande'+(nbMaj>1?'s':'')+' déjà saisie'+(nbMaj>1?'s':'')+' complétée'+(nbMaj>1?'s':'')+' (passée'+(nbMaj>1?'s':'')+' en facturé)';
-      const normal=ignores.filter(x=>x.raison.includes('non reconnu')||x.raison.includes('pas de date de facture'));
-      const anomalies=ignores.filter(x=>!(x.raison.includes('non reconnu')||x.raison.includes('pas de date de facture')));
+      const normal=ignores.filter(x=>x.raison.includes('non reconnu')||x.raison.includes('pas de date de facture')||x.raison.includes('annulée'));
+      const anomalies=ignores.filter(x=>!(x.raison.includes('non reconnu')||x.raison.includes('pas de date de facture')||x.raison.includes('annulée')));
       if(normal.length){
         const parRaison={};
         for(const x of normal){
-          const k=x.raison.includes('non reconnu')?('hors vendeurs suivis: '+x.vendeur):'pas encore facturées';
+          const k=x.raison.includes('non reconnu')?('hors vendeurs suivis: '+x.vendeur):x.raison.includes('annulée')?'annulées':'pas encore facturées';
           parRaison[k]=(parRaison[k]||0)+1;
         }
         msg+='\n\nℹ️ '+normal.length+' ligne'+(normal.length>1?'s':'')+' non concernée'+(normal.length>1?'s':'')+' (normal) : '
@@ -680,14 +695,20 @@ function render(){rAnnual();rProg();rCards();rCumul();rVentes();rCardsAnnuel();}
 
 // ── DÉMARRAGE ──
 (async()=>{
-  const ok = await sbLoad();
-  if(ok){
+  const etat = await sbLoad();
+  if(etat==='ok'){
     document.getElementById('sst').textContent='Données chargées';
-  } else {
-    // Supabase vide — utiliser données Excel et sauvegarder
+  } else if(etat==='empty'){
+    // Table réellement vide (confirmé par une réponse valide de Supabase, pas une erreur) — on initialise depuis Excel
     document.getElementById('sst').textContent='Initialisation depuis Excel...';
     await saveAll();
     document.getElementById('sst').textContent='Prêt';
+  } else {
+    // Échec de chargement (réseau, Supabase en pause, etc.) : on NE TOUCHE JAMAIS à la base dans ce cas.
+    // On affiche les données Excel par défaut uniquement à l'écran, sans rien sauvegarder, pour éviter d'écraser les vraies données.
+    LOAD_ERROR = true;
+    document.getElementById('sst').textContent='⚠️ Erreur de connexion — données non à jour, ne pas modifier';
+    alert('⚠️ Impossible de charger les données depuis le serveur (Supabase indisponible ou en pause).\n\nCe qui s\'affiche est un jeu de données par défaut, PAS vos vraies données actuelles.\n\nPar sécurité, aucune sauvegarde ne sera effectuée tant que la connexion n\'est pas rétablie. Rechargez la page dans quelques minutes, ou vérifiez votre projet Supabase.');
   }
   render();
 })();
