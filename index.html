@@ -598,11 +598,16 @@ function importXL(file, moisCible){
         console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
+      const norm=s=>String(s||'').toUpperCase().replace(/[\s\-]/g,'');
       // Aucune suppression : on met à jour une ligne existante (par plaque) ou on ajoute une nouvelle ligne. Jamais de suppression préalable.
       const parImmat=new Map();
-      for(const v of S.vendeurs) for(const x of v.ventes) if(x.immat) parImmat.set(x.immat, x);
+      for(const v of S.vendeurs) for(const x of v.ventes) if(x.immat) parImmat.set(norm(x.immat), x);
+      // Index secondaire (vendeur+client+modèle) pour repérer les quasi-doublons quand la plaque diffère (ex: tronquée)
+      const parCombo=new Map();
+      for(const v of S.vendeurs) for(const x of v.ventes) if(!x.annulation) parCombo.set(norm(v.nom)+'|'+norm(x.client)+'|'+norm(x.modele), x);
       let nb=0, nbMaj=0;
       const ignores=[];
+      const doublonsProbables=[];
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnomBrut=String(r[iV]||'').trim();
@@ -639,29 +644,35 @@ function importXL(file, moisCible){
         }
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=immatBrut;
-        const existant=immat?parImmat.get(immat):null;
+        const modeleBrut=String(r[iMo]||'').trim(),clientBrut=String(r[iCl]||'').trim();
+        const existant=immat?parImmat.get(norm(immat)):null;
         if(existant && existant.facture===true){ignores.push({immat,vendeur:vnomBrut,raison:'déjà facturée précédemment'});continue;}
         if(existant && existant.facture!==true){
           // Commande déjà saisie (en attente) : on la complète au lieu de créer un doublon
-          existant.facture=true;existant.date=dateStr;existant.modele=String(r[iMo]||'').trim()||existant.modele;
-          existant.client=String(r[iCl]||'').trim()||existant.client;
+          existant.facture=true;existant.date=dateStr;existant.modele=modeleBrut||existant.modele;
+          existant.client=clientBrut||existant.client;
           existant.marge=Math.round(mg*100)/100;existant.myana=existant.myana||'';
           existant.fi=r[iFI]===1;existant.mad=r[iAd]===1;existant.bulbee=r[iBu]===1;existant.coyote=r[iCo]===1;existant.protech=r[iPr]===1;existant.euro=r[iEu]===1;
           existant.cession=String(r[iG]||'').toUpperCase().includes('OUI');existant.reprise=r[iRe]===1;existant.voe=r[iLo]===1;
           existant.plus120=nj>=120;existant.ca=ca;existant.mois=mois;existant.annee=annee;existant.imported=true;
           nbMaj++;continue;
         }
+        // Pas de correspondance par plaque : on vérifie si un même vendeur+client+modèle existe déjà (quasi-doublon possible, ex: plaque tronquée)
+        const comboKey=norm(vnom)+'|'+norm(clientBrut)+'|'+norm(modeleBrut);
+        const comboExistant=clientBrut&&modeleBrut?parCombo.get(comboKey):null;
         const vend=S.vendeurs.find(v=>v.nom===vnom);
         if(vend){
           const nouvelle={
-            date:dateStr,modele:String(r[iMo]||'').trim(),immat,client:String(r[iCl]||'').trim(),
+            date:dateStr,modele:modeleBrut,immat,client:clientBrut,
             marge:Math.round(mg*100)/100,myana:'',facture:true,imported:true,
             fi:r[iFI]===1,mad:r[iAd]===1,bulbee:r[iBu]===1,coyote:r[iCo]===1,protech:r[iPr]===1,euro:r[iEu]===1,
             cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
             plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
           };
           vend.ventes.push(nouvelle);
-          if(immat)parImmat.set(immat,nouvelle);
+          if(immat)parImmat.set(norm(immat),nouvelle);
+          parCombo.set(comboKey,nouvelle);
+          if(comboExistant) doublonsProbables.push({vendeur:vnomBrut,client:clientBrut,modele:modeleBrut,plaque1:comboExistant.immat,plaque2:immat});
           nb++;
         }
       }
@@ -682,6 +693,11 @@ function importXL(file, moisCible){
       if(anomalies.length){
         msg+='\n\n⚠️ '+anomalies.length+' ligne'+(anomalies.length>1?'s':'')+' à vérifier :\n'
           + anomalies.map(x=>'- '+(x.immat||'(sans plaque)')+' ('+x.vendeur+') : '+x.raison).join('\n');
+      }
+      if(doublonsProbables.length){
+        msg+='\n\n🔁 '+doublonsProbables.length+' quasi-doublon'+(doublonsProbables.length>1?'s':'')+' possible'+(doublonsProbables.length>1?'s':'')+' (même client + même modèle, plaques différentes) :\n'
+          + doublonsProbables.map(x=>'- '+x.vendeur+' / '+x.client+' / '+x.modele+' : '+x.plaque1+' vs '+x.plaque2).join('\n')
+          + '\n→ Vérifiez s\'il s\'agit bien de 2 ventes distinctes, sinon supprimez le doublon manuellement.';
       }
       alert(msg);
     }catch(err){alert('Erreur: '+err.message);}
