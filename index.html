@@ -227,7 +227,10 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
         <div class="fr"><label>Immat</label><input type="text" id="fi2" placeholder="GN-338-HJ"></div>
         <div class="fr"><label>Client</label><input type="text" id="fcl" placeholder="Nom client"></div>
       </div>
-      <div class="fr"><label>Marge (€)</label><input type="number" id="fmg" placeholder="0"></div>
+      <div class="f2">
+        <div class="fr"><label>Marge (€)</label><input type="number" id="fmg" placeholder="0"></div>
+        <div class="fr"><label>CA FI (€)</label><input type="number" id="fca" placeholder="0"></div>
+      </div>
       <div class="f2">
         <div class="fr"><label>My Ana</label><select id="fmy"><option value="">—</option><option value="valide">✓ Validé</option><option value="attente">⏳ Attente</option></select></div>
         <div class="fr"><label>Facturé</label><select id="ffa"><option value="">—</option><option value="oui">Oui</option></select></div>
@@ -458,9 +461,9 @@ function rCards(){
   const CARTES_MASQUEES = ['MOTTAS','BDC']; // pas de carte individuelle, mais ventes toujours comptées dans les cumuls
   const chip=(l,v,warn)=>`<div class="vchip${v>0?' on'+(warn?' red':''):''}"><b>${v}</b> ${l}</div>`;
   document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>({v,i})).filter(({v})=>!CARTES_MASQUEES.includes(v.nom)).map(({v,i})=>{
-    const vm=vCdeV(i).filter(x=>!x.annulation),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
+    const vm=vCdeV(i).filter(x=>!x.annulation),mg=vm.reduce((s,x)=>s+(x.marge||0),0),caFi=vm.reduce((s,x)=>s+(x.ca||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
     return`<div class="vc" style="border-top:3px solid ${v.c}">
-    <div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
+    <div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge${caFi?' · '+fE(caFi)+' CA FI':''}</div></div></div>
     <div class="vhero"><div class="vheronum${nb===0?' zero':''}">${nb}</div><div class="vherolbl">ventes ce mois</div></div>
     <div class="vchips">
       ${chip('FI',g('fi'))}${chip('MAD',g('mad'))}${chip('Coyote',g('coyote'))}${chip('Protech',g('protech'))}${chip('Bulbee',g('bulbee'))}
@@ -495,8 +498,10 @@ function showTab(t){
 function rCumul(){
   const vm=vCde().filter(x=>!x.annulation),g=k=>vm.filter(x=>x[k]).length;
   const mgPrev=vm.filter(x=>!x.facture).reduce((s,x)=>s+(x.marge||0),0);
+  const caFiTotal=vm.reduce((s,x)=>s+(x.ca||0),0);
   document.getElementById('cgrid').innerHTML=[
     {v:vm.length,l:'VENTES'},{v:fE(mgPrev),l:'MARGE PRÉV.',sm:true},
+    {v:fE(caFiTotal),l:'CA FI',sm:true},
     {v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
     {v:g('mad'),l:'MAD'},{v:g('fi'),l:'FI'},
     {v:g('coyote'),l:'COYOTE'},{v:g('protech'),l:'PROTECH'},{v:g('bulbee'),l:'BULBEE'},
@@ -524,7 +529,7 @@ function chMois(d){S.mois+=d;if(S.mois<0){S.mois=11;S.annee--;}if(S.mois>11){S.m
 
 // ── MODAL ──
 function rmModal(){
-  ['fd','fm','fi2','fcl','fmg'].forEach(id=>document.getElementById(id).value='');
+  ['fd','fm','fi2','fcl','fmg','fca'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fmy').value='';document.getElementById('ffa').value='';
   document.getElementById('eidx').value='';document.getElementById('bdel').style.display='none';
   document.querySelectorAll('.ck input').forEach(cb=>{cb.checked=false;cb.closest('.ck').classList.remove('on');});
@@ -537,7 +542,7 @@ function oEdit(vi,idx){
   document.getElementById('mtit').textContent='Modifier — '+S.vendeurs[vi].nom;
   document.getElementById('fd').value=vt.date||'';document.getElementById('fm').value=vt.modele||'';
   document.getElementById('fi2').value=vt.immat||'';document.getElementById('fcl').value=vt.client||'';
-  document.getElementById('fmg').value=vt.marge||'';document.getElementById('fmy').value=vt.myana||'';
+  document.getElementById('fmg').value=vt.marge||'';document.getElementById('fca').value=vt.ca||'';document.getElementById('fmy').value=vt.myana||'';
   document.getElementById('ffa').value=vt.facture?'oui':'';
   sc('xfi',vt.fi);sc('xma',vt.mad);sc('xbu',vt.bulbee);sc('xco',vt.coyote);sc('xpr',vt.protech);
   sc('xeu',vt.euro);sc('xce',vt.cession);sc('xre',vt.reprise);sc('xvo',vt.voe);sc('xpl',vt.plus120);sc('xan',vt.annulation);
@@ -558,7 +563,7 @@ async function savV(){
     cession:document.getElementById('xce').checked,reprise:document.getElementById('xre').checked,
     voe:document.getElementById('xvo').checked,plus120:document.getElementById('xpl').checked,
     annulation:document.getElementById('xan').checked,
-    ca:0,mois:S.mois,annee:S.annee,moisCde:S.mois,anneeCde:S.annee,imported:false,
+    ca:parseFloat(document.getElementById('fca').value)||0,mois:S.mois,annee:S.annee,moisCde:S.mois,anneeCde:S.annee,imported:false,
   };
   const idx=document.getElementById('eidx').value;
   if(idx!=='')S.vendeurs[vi].ventes[parseInt(idx)]=obj;
