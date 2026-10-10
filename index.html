@@ -248,23 +248,75 @@ const EXCEL = {"CHAUMONT": [{"date": "Jeu 1", "modele": "SWIFT", "immat": "GW-68
 
 // ── ÉTAT ──
 const _now = new Date();
-let S = {obj:50, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:[...EXCEL[v.nom]||[]]}))};
+let S = {obj:50, objDef:50, objs:{}, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}))};
 
-// ── SUPABASE ──
-async function sbLoad(){
+// ── SUPABASE (synchro multi-appareils) ──
+// Principe : chaque vente = une ligne en base, repérée par son id. On n'envoie que ce qui a changé
+// (ajout / modification / suppression) et on relit la base toutes les 20 s pour afficher les
+// changements faits sur un autre appareil. Plus aucune réécriture globale de la table.
+const SYNC_MS = 20000;
+let _busy=false, _del=[], _cfgId=null, _cfgSig='', _seq=0, _lastRemote='', _loaded=false;
+
+// Objectif par mois : S.objs = {'2026-9':50,...} ; S.objDef = valeur par défaut (ancien objectif unique)
+function objKey(a,m){return a+'-'+m;}
+function objFor(a,m){const v=S.objs[objKey(a,m)];return (v!==undefined&&v!==null)?v:S.objDef;}
+function cfgStr(){return JSON.stringify({def:S.objDef,m:S.objs});}
+function parseCfg(txt){
+  try{const o=JSON.parse(txt);
+    if(o&&typeof o==='object'&&o.m)return {def:parseInt(o.def)||50,m:o.m};
+    if(typeof o==='number')return {def:o||50,m:{}};
+  }catch(e){}
+  return {def:parseInt(txt)||50,m:{}};
+}
+function rowOf(v,vt){
+  return {
+    vendeur:v.nom,date:vt.date||'',modele:vt.modele||'',immat:vt.immat||'',
+    client:vt.client||'',marge:vt.marge||0,myana:vt.myana||'',
+    facture:!!vt.facture,fi:!!vt.fi,mad:!!vt.mad,bulbee:!!vt.bulbee,
+    coyote:!!vt.coyote,protech:!!vt.protech,euro:!!vt.euro,cession:!!vt.cession,
+    reprise:!!vt.reprise,voe:!!vt.voe,plus120:!!vt.plus120,ca:vt.ca||0,
+    mois:vt.mois??0,annee:vt.annee||2026,mois_cde:vt.moisCde??vt.mois??0,
+    annee_cde:vt.anneeCde||vt.annee||2026,
+  };
+}
+function cfgRow(){
+  return {vendeur:'__CFG__',modele:cfgStr(),immat:String(S.mois),client:String(S.annee),
+    marge:0,myana:'',facture:false,fi:false,mad:false,bulbee:false,coyote:false,protech:false,
+    euro:false,cession:false,reprise:false,voe:false,plus120:false,ca:0,
+    mois:S.mois,annee:S.annee,mois_cde:S.mois,annee_cde:S.annee};
+}
+function localDirty(){
+  if(_del.length) return true;
+  if(cfgStr()!==_cfgSig) return true;
+  for(const v of S.vendeurs) for(const vt of v.ventes){
+    if(vt._id==null||vt._sig!==JSON.stringify(rowOf(v,vt))) return true;
+  }
+  return false;
+}
+
+async function sbFetch(){
   try{
     const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?select=*&order=id`,{headers:SB_HDR});
-    if(!r.ok){console.error('Load error:',r.status);return false;}
-    const rows = await r.json();
-    if(!rows||rows.length===0) return false;
-    // Reconstruire S depuis les lignes
-    const cfg = rows.find(r=>r.vendeur==='__CFG__');
-    // NB: on ne restaure que l'objectif ; le mois/année reste calé sur la date du jour (voir const _now)
-    // pour que le tableau des commandes change automatiquement de mois.
-    if(cfg){S.obj=parseInt(cfg.modele)||50;}
-    S.vendeurs = VDEF.map(v=>({
-      ...v,
-      ventes: rows.filter(r=>r.vendeur===v.nom).map(r=>({
+    if(!r.ok){console.error('Load error:',r.status);return null;}
+    return await r.json();
+  }catch(e){console.error('sbFetch exception:',e);return null;}
+}
+
+function applyRows(rows){
+  const cfg = rows.find(r=>r.vendeur==='__CFG__');
+  // On ne restaure que l'objectif ; le mois/année reste calé sur la date du jour (voir const _now).
+  if(cfg){
+    _cfgId=cfg.id;
+    const el=document.getElementById('oi');
+    const pc=parseCfg(cfg.modele);
+    _cfgSig=JSON.stringify({def:pc.def,m:pc.m});
+    // Si vous êtes en train de taper dans le champ objectif, on ne l'écrase pas
+    if(!(el&&document.activeElement===el)){S.objDef=pc.def;S.objs=pc.m;S.obj=objFor(S.annee,S.mois);}
+  }
+  S.vendeurs = VDEF.map(v=>{
+    const nv={...v,ventes:[]};
+    nv.ventes = rows.filter(r=>r.vendeur===v.nom).map(r=>{
+      const vt={
         date:r.date||'',modele:r.modele||'',immat:r.immat||'',client:r.client||'',
         marge:parseFloat(r.marge)||0,myana:r.myana||'',facture:r.facture===true||r.facture==='true',
         fi:r.fi===true||r.fi==='true',mad:r.mad===true||r.mad==='true',bulbee:r.bulbee===true||r.bulbee==='true',coyote:r.coyote===true||r.coyote==='true',
@@ -273,60 +325,119 @@ async function sbLoad(){
         mois:parseInt(r.mois)||0,annee:parseInt(r.annee)||2026,
         moisCde:parseInt(r.mois_cde)>=0?parseInt(r.mois_cde):parseInt(r.mois)||0,
         anneeCde:parseInt(r.annee_cde)||parseInt(r.annee)||2026,
-      }))
-    }));
-    return true;
-  }catch(e){console.error('sbLoad exception:',e);return false;}
+        _id:r.id,
+      };
+      vt._sig=JSON.stringify(rowOf(nv,vt));
+      return vt;
+    });
+    return nv;
+  });
+  _del=[];
+}
+
+// Retourne 'ok', 'empty' (base vide) ou 'error' (chargement impossible)
+async function sbLoad(){
+  const rows = await sbFetch();
+  if(rows===null) return 'error';
+  if(rows.length===0) return 'empty';
+  applyRows(rows);
+  _lastRemote = JSON.stringify(rows);
+  _loaded = true;
+  return 'ok';
 }
 
 async function sbSave(){
+  if(!_loaded){console.error('Sauvegarde bloquée : base non chargée');return false;}
   try{
-    // Supprimer
-    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=gte.0`,{method:'DELETE',headers:SB_HDR});
-    // Construire les lignes
-    const rows = [];
-    for(const v of S.vendeurs){
-      for(const vt of v.ventes){
-        rows.push({
-          vendeur:v.nom,date:vt.date||'',modele:vt.modele||'',immat:vt.immat||'',
-          client:vt.client||'',marge:vt.marge||0,myana:vt.myana||'',
-          facture:!!vt.facture,fi:!!vt.fi,mad:!!vt.mad,bulbee:!!vt.bulbee,
-          coyote:!!vt.coyote,protech:!!vt.protech,euro:!!vt.euro,cession:!!vt.cession,
-          reprise:!!vt.reprise,voe:!!vt.voe,plus120:!!vt.plus120,ca:vt.ca||0,
-          mois:vt.mois||0,annee:vt.annee||2026,mois_cde:vt.moisCde||vt.mois||0,
-          annee_cde:vt.anneeCde||vt.annee||2026,
-        });
-      }
+    const T=`${SB_URL}/rest/v1/${SB_TABLE}`;
+    // 1) Suppressions
+    while(_del.length){
+      const ids=_del.slice(0,100);
+      const r=await fetch(`${T}?id=in.(${ids.join(',')})`,{method:'DELETE',headers:SB_HDR});
+      if(!r.ok) throw new Error('delete '+r.status);
+      _del=_del.filter(x=>!ids.includes(x));
     }
-    // Config
-    rows.push({vendeur:'__CFG__',modele:String(S.obj),immat:String(S.mois),client:String(S.annee),
-      marge:0,myana:'',facture:false,fi:false,mad:false,bulbee:false,coyote:false,protech:false,
-      euro:false,cession:false,reprise:false,voe:false,plus120:false,ca:0,
-      mois:S.mois,annee:S.annee,mois_cde:S.mois,annee_cde:S.annee});
-    // Insérer par lots
-    for(let i=0;i<rows.length;i+=100){
-      const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{
-        method:'POST',headers:{...SB_HDR,'Prefer':'return=minimal'},
-        body:JSON.stringify(rows.slice(i,i+100))
-      });
-      if(!r.ok){const t=await r.text();console.error('Insert error:',r.status,t);}
+    // 2) Ventes nouvelles / modifiées
+    const news=[],mods=[];
+    for(const v of S.vendeurs) for(const vt of v.ventes){
+      const row=rowOf(v,vt),sig=JSON.stringify(row);
+      if(vt._id==null) news.push({vt,row,sig});
+      else if(vt._sig!==sig) mods.push({vt,row,sig});
+    }
+    for(let i=0;i<news.length;i+=100){
+      const lot=news.slice(i,i+100);
+      const r=await fetch(T,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(lot.map(x=>x.row))});
+      if(!r.ok) throw new Error('insert '+r.status+' '+await r.text());
+      const back=await r.json();
+      if(!Array.isArray(back)||back.length!==lot.length) throw new Error('insert: réponse inattendue');
+      lot.forEach((x,k)=>{x.vt._id=back[k].id;x.vt._sig=x.sig;});
+    }
+    for(let i=0;i<mods.length;i+=10){
+      await Promise.all(mods.slice(i,i+10).map(async x=>{
+        const r=await fetch(`${T}?id=eq.${x.vt._id}`,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify(x.row)});
+        if(!r.ok) throw new Error('update '+r.status);
+        x.vt._sig=x.sig;
+      }));
+    }
+    // 3) Objectif
+    if(_cfgId==null){
+      const r=await fetch(T,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify([cfgRow()])});
+      if(!r.ok) throw new Error('cfg insert '+r.status);
+      const back=await r.json();_cfgId=back[0].id;_cfgSig=cfgStr();
+    } else if(_cfgSig!==cfgStr()){
+      const r=await fetch(`${T}?id=eq.${_cfgId}`,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=minimal'},body:JSON.stringify(cfgRow())});
+      if(!r.ok) throw new Error('cfg update '+r.status);
+      _cfgSig=cfgStr();
     }
     return true;
   }catch(e){console.error('sbSave exception:',e);return false;}
 }
 
 async function saveAll(){
+  if(_busy) { await new Promise(res=>{const t=setInterval(()=>{if(!_busy){clearInterval(t);res();}},100);}); }
+  _busy=true;
   document.getElementById('sst').textContent='Sauvegarde...';
-  const ok = await sbSave();
+  let ok=false;
+  try{ ok = await sbSave(); } finally { _busy=false; _seq++; }
   document.getElementById('sst').textContent = ok
     ? 'Sauvegardé le '+new Date().toLocaleTimeString('fr-FR')
-    : '⚠️ Erreur de sauvegarde';
+    : (_loaded?'⚠️ Erreur de sauvegarde':'⚠️ Hors ligne : rien n\'a été enregistré');
+}
+
+// ── MISE À JOUR EN DIRECT ──
+async function syncPoll(){
+  if(document.hidden||_busy) return;
+  const seq=_seq;
+  const rows=await sbFetch();
+  if(rows===null) return;
+  // Pendant la requête, une sauvegarde a pu avoir lieu, une fenêtre s'ouvrir, ou des modifs locales apparaître : on laisse tomber
+  if(_busy||seq!==_seq) return;
+  if(document.getElementById('ov').classList.contains('open')) return;
+  if(!_loaded){
+    // Premier chargement qui avait échoué : on récupère enfin les vraies données
+    if(rows.length===0) return;
+    applyRows(rows);_loaded=true;_lastRemote=JSON.stringify(rows);render();
+    document.getElementById('sst').textContent='Données chargées';
+    return;
+  }
+  if(localDirty()) return;
+  const sig=JSON.stringify(rows);
+  if(sig===_lastRemote) return;
+  _lastRemote=sig;
+  applyRows(rows);
+  render();
+  document.getElementById('sst').textContent='Mis à jour à '+new Date().toLocaleTimeString('fr-FR');
+}
+function startSync(){
+  setInterval(syncPoll,SYNC_MS);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncPoll();});
 }
 
 async function resetAll(){
   if(!confirm('Réinitialiser depuis les données Excel ?')) return;
-  S.vendeurs = VDEF.map(v=>({...v,ventes:[...EXCEL[v.nom]||[]]}));
-  const n=new Date();S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
+  S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(x._id!=null)_del.push(x._id);}));
+  S.vendeurs = VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}));
+  const n=new Date();S.objDef=50;S.objs={};S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
   render();
   await saveAll();
 }
@@ -353,7 +464,7 @@ function rAnnual(){
   document.getElementById('moisLbl').textContent=MNOMS[S.mois]+' '+S.annee;
 }
 
-async function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;rProg();await saveAll();}
+async function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;S.objs[objKey(S.annee,S.mois)]=S.obj;rProg();await saveAll();}
 function rProg(){
   const vm=vFact(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
   const jo=joOuv(S.annee,S.mois);
@@ -419,7 +530,7 @@ function rVentes(){
 }
 
 function renV(vi){const n=prompt('Nouveau nom :',S.vendeurs[vi].nom);if(n&&n.trim()){S.vendeurs[vi].nom=n.trim().toUpperCase();S.vendeurs[vi].i=n.trim().toUpperCase().split(' ').map(w=>w[0]).join('').slice(0,2);render();}}
-function chMois(d){S.mois+=d;if(S.mois<0){S.mois=11;S.annee--;}if(S.mois>11){S.mois=0;S.annee++;}render();}
+function chMois(d){S.mois+=d;if(S.mois<0){S.mois=11;S.annee--;}if(S.mois>11){S.mois=0;S.annee++;}S.obj=objFor(S.annee,S.mois);render();}
 
 // ── MODAL ──
 function rmModal(){
@@ -463,7 +574,7 @@ async function savV(){
     // À la modification, on garde les mois/années d'origine (facture + commande) et le CA,
     // sinon la vente serait déplacée vers le mois actuellement affiché.
     const old=S.vendeurs[vi].ventes[parseInt(idx)]||{};
-    ['mois','annee','moisCde','anneeCde','ca'].forEach(k=>{if(old[k]!==undefined)obj[k]=old[k];});
+    ['mois','annee','moisCde','anneeCde','ca','_id'].forEach(k=>{if(old[k]!==undefined)obj[k]=old[k];});
     S.vendeurs[vi].ventes[parseInt(idx)]=obj;
   }
   else S.vendeurs[vi].ventes.push(obj);
@@ -475,7 +586,7 @@ async function delV(){
   if(!confirm('Supprimer ?'))return;
   const vi=parseInt(document.getElementById('evi').value);
   const idx=parseInt(document.getElementById('eidx').value);
-  S.vendeurs[vi].ventes.splice(idx,1);cov();render();
+  const gone=S.vendeurs[vi].ventes.splice(idx,1)[0];if(gone&&gone._id!=null)_del.push(gone._id);cov();render();
   await saveAll();
 }
 
@@ -510,14 +621,11 @@ function importXL(file, moisCible){
         console.log(`Ligne ${t}: vendeur=${r[iV]}, dateF=${r[iF]}, type=${typeof r[iF]}, annul=${r[iAN]}`);
       }
       const VNOMS=S.vendeurs.map(v=>v.nom);
-      // Supprimer les facturées existantes si import mensuel
-      if(moisCible!==null){
-        for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!(x.facture&&x.mois===moisCible&&x.annee===S.annee));
-      } else {
-        for(const v of S.vendeurs) v.ventes=v.ventes.filter(x=>!x.facture);
-      }
-      const existants=new Set(S.vendeurs.flatMap(v=>v.ventes.map(x=>x.immat)));
-      let nb=0;
+      // Import non destructif : rien n'est supprimé. Les ventes déjà présentes (repérées par
+      // l'immatriculation) sont mises à jour, les nouvelles sont ajoutées.
+      const parIm=new Map();
+      S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(x.immat)parIm.set(x.immat,x);}));
+      let nb=0,nbMaj=0;
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnom=String(r[iV]||'').trim().toUpperCase();
@@ -551,21 +659,29 @@ function importXL(file, moisCible){
         }
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
-        if(immat&&existants.has(immat))continue;
         const vend=S.vendeurs.find(v=>v.nom===vnom);
         if(vend){
-          vend.ventes.push({
+          const nouv={
             date:dateStr,modele:String(r[iMo]||'').trim(),immat,client:String(r[iCl]||'').trim(),
             marge:Math.round(mg*100)/100,myana:'',facture:true,
             fi:r[iFI]===1,mad:r[iAd]===1,bulbee:r[iBu]===1,coyote:r[iCo]===1,protech:r[iPr]===1,euro:r[iEu]===1,
             cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
             plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
-          });
-          if(immat)existants.add(immat);nb++;
+          };
+          const ex=immat?parIm.get(immat):null;
+          if(ex){
+            // Vente déjà connue : on met à jour avec l'Excel, en gardant le suivi My Ana saisi dans l'appli
+            Object.assign(ex,nouv,{myana:ex.myana||''});
+            nbMaj++;
+          } else {
+            vend.ventes.push(nouv);
+            if(immat)parIm.set(immat,nouv);
+            nb++;
+          }
         }
       }
       render();await saveAll();
-      alert('✅ '+nb+' vente'+(nb>1?'s':'')+' importée'+(nb>1?'s':''));
+      alert('✅ '+nb+' vente'+(nb>1?'s':'')+' ajoutée'+(nb>1?'s':'')+' · '+nbMaj+' mise'+(nbMaj>1?'s':'')+' à jour');
     }catch(err){alert('Erreur: '+err.message);}
   };
   reader.readAsArrayBuffer(file);
@@ -577,16 +693,21 @@ function render(){rAnnual();rProg();rCards();rCumul();rVentes();}
 
 // ── DÉMARRAGE ──
 (async()=>{
-  const ok = await sbLoad();
-  if(ok){
+  const st = await sbLoad();
+  if(st==='ok'){
     document.getElementById('sst').textContent='Données chargées';
-  } else {
-    // Supabase vide — utiliser données Excel et sauvegarder
+  } else if(st==='empty'){
+    // Base vraiment vide (réponse OK mais 0 ligne) : on la remplit avec les données Excel intégrées
     document.getElementById('sst').textContent='Initialisation depuis Excel...';
+    _loaded=true;
     await saveAll();
     document.getElementById('sst').textContent='Prêt';
+  } else {
+    // Chargement impossible : on n'écrit RIEN pour ne pas écraser la base
+    document.getElementById('sst').textContent='⚠️ Connexion impossible — rechargez la page (rien n\'est enregistré)';
   }
   render();
+  startSync();
 })();
 </script>
 </body>
