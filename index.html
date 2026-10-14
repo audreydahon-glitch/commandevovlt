@@ -77,7 +77,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .cs::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .cs.c0::before{background:#1B2D5B}.cs.c1::before{background:#7C3AED}.cs.c2::before{background:#0891B2}
 .cs.c3::before{background:#059669}.cs.c4::before{background:#DC2626}.cs.c5::before{background:#D97706}
-.cs.c6::before{background:#9333EA}.cs.c7::before{background:#0369A1}.cs.c8::before{background:#B45309}.cs.c9::before{background:#374151}.cs.c10::before{background:#065F46}
+.cs.c6::before{background:#9333EA}.cs.c7::before{background:#0369A1}.cs.c8::before{background:#B45309}.cs.c9::before{background:#374151}.cs.c10::before{background:#065F46}.cs.c11::before{background:#16A34A}
 .csv{font-size:18px;font-weight:700}
 .csl{font-size:7px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-top:2px}
 .css{font-size:8px;color:#999;margin-top:1px}
@@ -511,13 +511,15 @@ function rCards(){
 function rCumul(){
   const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi).reduce((s,x)=>s+(x.ca||0),0);
+  const mgp=vm.reduce((s,x)=>s+(x.marge||0),0); // marges prévisionnelles = somme des marges des commandes du mois
   document.getElementById('cgrid').innerHTML=[
-    {v:vm.length,l:'VENTES'},{v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
-    {v:g('mad'),l:'MAD'},{v:g('fi'),l:'FI'},
-    {v:ca>0?Math.round(ca).toLocaleString('fr-FR')+' €':'—',l:'DÉCAISS. FI',sm:true},
-    {v:g('coyote'),l:'COYOTE'},{v:g('protech'),l:'PROTECH'},{v:g('bulbee'),l:'BULBEE'},
-    {v:g('cession'),l:'CESSION'},{v:g('voe'),l:'VOE'},{v:g('plus120'),l:'+120J'},
-  ].map((it,i)=>`<div class="cs c${i}"><div class="csv" style="${it.sm?'font-size:12px;':''}">${it.v}</div><div class="csl">${it.l}</div><div class="css">ce mois</div></div>`).join('');
+    {k:0,v:vm.length,l:'VENTES'},{k:1,v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
+    {k:11,v:Math.round(mgp).toLocaleString('fr-FR')+' €',l:'MARGES PRÉV.',sm:true},
+    {k:2,v:g('mad'),l:'MAD'},{k:3,v:g('fi'),l:'FI'},
+    {k:4,v:ca>0?Math.round(ca).toLocaleString('fr-FR')+' €':'—',l:'DÉCAISS. FI',sm:true},
+    {k:5,v:g('coyote'),l:'COYOTE'},{k:6,v:g('protech'),l:'PROTECH'},{k:7,v:g('bulbee'),l:'BULBEE'},
+    {k:8,v:g('cession'),l:'CESSION'},{k:9,v:g('voe'),l:'VOE'},{k:10,v:g('plus120'),l:'+120J'},
+  ].map(it=>`<div class="cs c${it.k}"><div class="csv" style="${it.sm?'font-size:12px;':''}">${it.v}</div><div class="csl">${it.l}</div><div class="css">ce mois</div></div>`).join('');
 }
 
 function rVentes(){
