@@ -470,7 +470,7 @@ function rAnnual(){
 
 async function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;S.objs[objKey(S.annee,S.mois)]=S.obj;rProg();await saveAll();}
 function rProg(){
-  const vm=vFact(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
+  const vm=vCde(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
   const jo=joOuv(S.annee,S.mois);
   document.getElementById('oi').value=obj;
   document.getElementById('oc').textContent=nb;
