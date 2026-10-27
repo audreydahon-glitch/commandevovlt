@@ -512,10 +512,11 @@ function rCards(){
 function rCumul(){
   const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi).reduce((s,x)=>s+(x.ca||0),0);
-  const mgp=vm.reduce((s,x)=>s+(x.marge||0),0); // marges prévisionnelles = somme des marges des commandes du mois
+  // Marge restante à facturer = marge des commandes du mois pas encore facturées (les factures faites se déduisent)
+  const mgp=vm.filter(x=>!x.facture).reduce((s,x)=>s+(x.marge||0),0);
   document.getElementById('cgrid').innerHTML=[
     {k:0,v:vm.length,l:'VENTES'},{k:1,v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
-    {k:11,v:Math.round(mgp).toLocaleString('fr-FR')+' €',l:'MARGES PRÉV.',sm:true},
+    {k:11,v:Math.round(mgp).toLocaleString('fr-FR')+' €',l:'MARGE À FACTURER',sm:true},
     {k:2,v:g('mad'),l:'MAD'},{k:3,v:g('fi'),l:'FI'},
     {k:4,v:ca>0?Math.round(ca).toLocaleString('fr-FR')+' €':'—',l:'DÉCAISS. FI',sm:true},
     {k:5,v:g('coyote'),l:'COYOTE'},{k:6,v:g('protech'),l:'PROTECH'},{k:7,v:g('bulbee'),l:'BULBEE'},
