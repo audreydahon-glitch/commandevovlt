@@ -188,6 +188,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
   <div class="stitle">
     Ventes du mois par vendeur
     <label class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px">⬆ Importer factures<input type="file" accept=".xlsx,.xls" id="impM" style="display:none"></label>
+    <button class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px;margin-left:6px" onclick="dedupe()">🧹 Doublons</button>
   </div>
   <div id="vsecs"></div>
 </div>
@@ -470,7 +471,7 @@ function rAnnual(){
 
 async function updObj(){S.obj=parseInt(document.getElementById('oi').value)||1;S.objs[objKey(S.annee,S.mois)]=S.obj;rProg();await saveAll();}
 function rProg(){
-  const vm=vCde(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
+  const vm=vFact(),nb=vm.length,obj=S.obj,pct=obj?Math.min(Math.round(nb/obj*100),100):0,ok=nb>=obj;
   const jo=joOuv(S.annee,S.mois);
   document.getElementById('oi').value=obj;
   document.getElementById('oc').textContent=nb;
@@ -629,8 +630,9 @@ function importXL(file, moisCible){
       const VNOMS=S.vendeurs.map(v=>v.nom);
       // Import non destructif : rien n'est supprimé. Les ventes déjà présentes (repérées par
       // l'immatriculation) sont mises à jour, les nouvelles sont ajoutées.
+      const imKey=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
       const parIm=new Map();
-      S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(x.immat)parIm.set(x.immat,x);}));
+      S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(imKey(x.immat))parIm.set(imKey(x.immat),x);}));
       let nb=0,nbMaj=0;
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
@@ -663,6 +665,11 @@ function importXL(file, moisCible){
           const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(dc));
           moisCde=d.getUTCMonth();anneeCde=d.getUTCFullYear();
         }
+        else if(typeof dc==='string'){
+          const a=dc.match(/(\d{4})-(\d{2})-(\d{2})/),b=dc.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if(a){moisCde=parseInt(a[2])-1;anneeCde=parseInt(a[1]);}
+          else if(b){moisCde=parseInt(b[2])-1;anneeCde=parseInt(b[3]);}
+        }
         const mg=parseFloat(r[iM])||0,ca=r[iFI]==1?(parseFloat(r[iCA])||0):0,nj=parseFloat(r[iJ])||0;
         const immat=String(r[iIm]||'').trim();
         const vend=S.vendeurs.find(v=>v.nom===vnom);
@@ -674,14 +681,14 @@ function importXL(file, moisCible){
             cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
             plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
           };
-          const ex=immat?parIm.get(immat):null;
+          const ex=imKey(immat)?parIm.get(imKey(immat)):null;
           if(ex){
             // Vente déjà connue : on met à jour avec l'Excel, en gardant le suivi My Ana saisi dans l'appli
             Object.assign(ex,nouv,{myana:ex.myana||''});
             nbMaj++;
           } else {
             vend.ventes.push(nouv);
-            if(immat)parIm.set(immat,nouv);
+            if(imKey(immat))parIm.set(imKey(immat),nouv);
             nb++;
           }
         }
@@ -694,6 +701,33 @@ function importXL(file, moisCible){
 }
 document.getElementById('impM').addEventListener('change',e=>{if(e.target.files[0])importXL(e.target.files[0],S.mois);e.target.value='';});
 document.getElementById('impA').addEventListener('change',e=>{if(e.target.files[0])importXL(e.target.files[0],null);e.target.value='';});
+
+// Détecte les ventes en double (même immatriculation, tirets/espaces ignorés) et propose de les fusionner
+async function dedupe(){
+  const key=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const groups=new Map();
+  S.vendeurs.forEach((v,vi)=>v.ventes.forEach(x=>{
+    const k=key(x.immat);if(!k)return;
+    if(!groups.has(k))groups.set(k,[]);
+    groups.get(k).push({v,vi,x});
+  }));
+  const plans=[...groups.values()].filter(g=>g.length>1).map(g=>{
+    // On garde la ligne facturée si elle existe (sinon la première), on supprime les autres
+    const sorted=[...g].sort((a,b)=>(b.x.facture?1:0)-(a.x.facture?1:0));
+    return {keep:sorted[0],drop:sorted.slice(1)};
+  });
+  const n=plans.reduce((t,p)=>t+p.drop.length,0);
+  if(!n){alert('Aucun doublon trouvé (même immatriculation).');return;}
+  const ex=plans.slice(0,10).map(p=>'• '+p.keep.x.immat+' · '+(p.keep.x.client||'—')+' ('+p.keep.v.nom+') ×'+(p.drop.length+1)).join('\n');
+  if(!confirm(n+' ligne'+(n>1?'s':'')+' en double à supprimer ('+plans.length+' véhicule'+(plans.length>1?'s':'')+').\nOn garde la ligne facturée et on conserve le suivi My Ana.\n\n'+ex+(plans.length>10?'\n…':'')+'\n\nContinuer ?'))return;
+  plans.forEach(p=>p.drop.forEach(d=>{
+    if(!p.keep.x.myana&&d.x.myana)p.keep.x.myana=d.x.myana;
+    const arr=S.vendeurs[d.vi].ventes;arr.splice(arr.indexOf(d.x),1);
+    if(d.x._id!=null)_del.push(d.x._id);
+  }));
+  render();await saveAll();
+  alert('✅ '+n+' doublon'+(n>1?'s':'')+' supprimé'+(n>1?'s':''));
+}
 
 function render(){rAnnual();rProg();rCards();rCumul();rVentes();}
 
