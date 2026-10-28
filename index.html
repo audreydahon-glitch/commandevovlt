@@ -614,7 +614,14 @@ function cif(e){if(e.target.id==='ov')cov();}
 document.querySelectorAll('.ck input').forEach(cb=>cb.addEventListener('change',()=>cb.closest('.ck').classList.toggle('on',cb.checked)));
 
 // ── IMPORT EXCEL ──
-function fixXLDate(d){return new Date(Math.round(d.getTime()/60000)*60000);}
+function fixXLDate(d){
+  // Les dates Excel arrivent parfois décalées de quelques minutes ou d'1 h (heure d'été/hiver).
+  // Si on est à moins de 90 min d'un minuit, on se recale dessus pour ne jamais changer de jour/mois.
+  const t=d.getTime(),mid=new Date(d.getFullYear(),d.getMonth(),d.getDate()),nxt=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
+  if(t-mid.getTime()<=5400000) return mid;
+  if(nxt.getTime()-t<=5400000) return nxt;
+  return new Date(Math.round(t/60000)*60000);
+}
 function importXL(file, moisCible){
   const reader=new FileReader();
   reader.onload=async e=>{
@@ -645,7 +652,7 @@ function importXL(file, moisCible){
       const imKey=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
       const parIm=new Map();
       S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(imKey(x.immat))parIm.set(imKey(x.immat),x);}));
-      let nb=0,nbMaj=0;
+      let nb=0,nbMaj=0;const vues=new Set();
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnom=String(r[iV]||'').trim().toUpperCase();
@@ -693,6 +700,7 @@ function importXL(file, moisCible){
             cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
             plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
           };
+          if(imKey(immat))vues.add(imKey(immat));
           const ex=imKey(immat)?parIm.get(imKey(immat)):null;
           if(ex){
             // Vente déjà connue : on met à jour avec l'Excel, en gardant le suivi My Ana saisi dans l'appli
@@ -707,6 +715,24 @@ function importXL(file, moisCible){
       }
       render();await saveAll();
       alert('✅ '+nb+' vente'+(nb>1?'s':'')+' ajoutée'+(nb>1?'s':'')+' · '+nbMaj+' mise'+(nbMaj>1?'s':'')+' à jour');
+      // Contrôle : ventes comptées « facturées » dans l'appli mais absentes de cet Excel
+      // (facture annulée ou retirée depuis, autre date de facture, doublon, saisie manuelle…)
+      const orph=[];
+      S.vendeurs.forEach(v=>v.ventes.forEach(x=>{
+        if(!x.facture||isAnn(x))return;
+        if(moisCible!==null&&!(parseInt(x.mois)===moisCible&&parseInt(x.annee)===S.annee))return;
+        const k=imKey(x.immat);
+        if(k&&vues.has(k))return;
+        orph.push({v,x});
+      }));
+      if(orph.length){
+        const lst=orph.slice(0,12).map(o=>'• '+(o.x.immat||'sans immat')+' · '+(o.x.client||'—')+' ('+o.v.nom+')').join('\n');
+        if(confirm('⚠️ '+orph.length+' vente'+(orph.length>1?'s sont':' est')+' comptée'+(orph.length>1?'s':'')+' « facturée'+(orph.length>1?'s':'')+' » dans l\'appli mais absente'+(orph.length>1?'s':'')+' de cet Excel :\n\n'+lst+(orph.length>12?'\n…':'')+'\n\nLes repasser en « non facturée » ? (la commande est conservée, rien n\'est supprimé)')){
+          orph.forEach(o=>{o.x.facture=false;});
+          render();await saveAll();
+          alert('✅ '+orph.length+' vente'+(orph.length>1?'s':'')+' repassée'+(orph.length>1?'s':'')+' en non facturée');
+        }
+      }
     }catch(err){alert('Erreur: '+err.message);}
   };
   reader.readAsArrayBuffer(file);
