@@ -84,6 +84,12 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .vsec{margin-bottom:10px;background:#fff;border:1px solid #E5E5E0;border-radius:12px;overflow-x:auto;overflow-y:hidden}
 .vsh{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid #E5E5E0}
 .vshst{font-size:11px;color:#999;margin-left:auto;display:flex;gap:10px}
+.vtabs{display:flex;gap:4px;margin-left:10px}
+.vtab{border:1px solid #E5E5E0;background:#fff;color:#777;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.vtab.on{background:#1B2D5B;color:#fff;border-color:#1B2D5B}
+.vtab.ann.on{background:#C0392B;border-color:#C0392B}
+.vtab i{font-style:normal;opacity:.7;margin-left:4px}
+.sx{background:#FEE2E2;color:#B91C1C;font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px}
 .badd{background:#1B2D5B;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 .vtbl{width:100%;min-width:680px;border-collapse:collapse;table-layout:fixed}
 .vtbl th:nth-child(1){width:11%}.vtbl th:nth-child(2){width:16%}.vtbl th:nth-child(3){width:14%}
@@ -210,6 +216,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
         <div class="fr"><label>My Ana</label><select id="fmy"><option value="">—</option><option value="valide">✓ Validé</option><option value="attente">⏳ Attente</option></select></div>
         <div class="fr"><label>Facturé</label><select id="ffa"><option value="">—</option><option value="oui">Oui</option></select></div>
       </div>
+      <div class="fr"><label>Statut</label><select id="fan"><option value="">Vente en cours</option><option value="annule">❌ Annulée (retirée des compteurs)</option></select></div>
       <div class="fr"><label>Options</label>
         <div class="ckg">
           <label class="ck"><input type="checkbox" id="xfi"> FI</label>
@@ -450,13 +457,19 @@ async function resetAll(){
 // ── UTILITAIRES ──
 function fE(v){if(!v||v===0)return'0€';const r=Math.round(v);return(r<0?'−':'')+Math.abs(r).toLocaleString('fr-FR')+'€'}
 function joOuv(an,mo){const dim=new Date(an,mo+1,0).getDate(),today=new Date();let tot=0,ec=0;for(let i=1;i<=dim;i++){const j=new Date(an,mo,i).getDay();if(j!==0){tot++;if(new Date(an,mo,i)<=today)ec++;}}return{tot,ec,re:tot-ec};}
-function vFact(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>x.facture===true&&parseInt(x.mois)===S.mois&&parseInt(x.annee)===S.annee));}
-function vCde(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee));}
-function vCdeV(vi){return S.vendeurs[vi].ventes.filter(x=>parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee);}
+// Une vente annulée est repérée par myana==='annule' (colonne texte existante, aucun changement de base)
+function isAnn(x){return x.myana==='annule';}
+function vFact(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>x.facture===true&&!isAnn(x)&&parseInt(x.mois)===S.mois&&parseInt(x.annee)===S.annee));}
+function vCde(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>!isAnn(x)&&parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee));}
+function vCdeV(vi){return S.vendeurs[vi].ventes.filter(x=>!isAnn(x)&&parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee);}
+function vAnnV(vi){return S.vendeurs[vi].ventes.filter(x=>isAnn(x)&&parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee);}
+const TAB={};
+function setTab(vi,t){TAB[vi]=t;rVentes();}
+async function restoreV(vi,idx){S.vendeurs[vi].ventes[idx].myana='';render();await saveAll();}
 
 // ── RENDER ──
 function rAnnual(){
-  const t=S.vendeurs.flatMap(v=>v.ventes).filter(x=>x.facture&&parseInt(x.annee)===S.annee);
+  const t=S.vendeurs.flatMap(v=>v.ventes).filter(x=>x.facture&&!isAnn(x)&&parseInt(x.annee)===S.annee);
   const g=k=>t.filter(x=>x[k]).length;
   document.querySelector('.annual-label h3').textContent='Cumul annuel '+S.annee;
   document.querySelector('.annual-label p').textContent='Toutes activités · '+S.annee;
@@ -526,14 +539,23 @@ function rCumul(){
 
 function rVentes(){
   document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>{
-    const vm=vCdeV(vi),mg=vm.reduce((s,x)=>s+(x.marge||0),0);
+    const vm=vCdeV(vi),an=vAnnV(vi),mg=vm.reduce((s,x)=>s+(x.marge||0),0);
+    const tab=TAB[vi]==='a'?'a':'v';
     const rows=vm.map(vt=>{
       const gi=S.vendeurs[vi].ventes.indexOf(vt);
       const mb=!vt.marge||vt.marge===0?`<span class="mb mbz">0€</span>`:vt.marge<0?`<span class="mb mbn">${fE(vt.marge)}</span>`:`<span class="mb mbp">${fE(vt.marge)}</span>`;
       const my=vt.myana==='valide'?'<span class="sv">✓ Validé</span>':vt.myana==='attente'?'<span class="sa">⏳ Attente</span>':'<span class="sn">—</span>';
       return`<tr><td><span class="dot${vt.facture?'':' p'}"></span>${vt.date||'—'}</td><td><b>${vt.modele||'—'}</b></td><td style="font-family:monospace;font-size:10px;color:#999">${vt.immat||'—'}</td><td>${vt.client||'—'}</td><td>${mb}</td><td>${my}</td><td>${vt.facture?'<span class="sv">Oui</span>':'<span class="sn">—</span>'}</td><td><button class="bmod" onclick="oEdit(${vi},${gi})">Modifier</button></td></tr>`;
     }).join('');
-    return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.nom}</b><div class="vshst"><span>${fE(mg)}</span><span>${vm.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${vm.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>'}</div>`;
+    const rowsA=an.map(vt=>{
+      const gi=S.vendeurs[vi].ventes.indexOf(vt);
+      return`<tr><td>${vt.date||'—'}</td><td><b>${vt.modele||'—'}</b></td><td style="font-family:monospace;font-size:10px;color:#999">${vt.immat||'—'}</td><td>${vt.client||'—'}</td><td><span class="mb mbz">${fE(vt.marge||0)}</span></td><td><span class="sx">❌ Annulée</span></td><td><button class="bmod" onclick="restoreV(${vi},${gi})">Rétablir</button></td><td><button class="bmod" onclick="oEdit(${vi},${gi})">Modifier</button></td></tr>`;
+    }).join('');
+    const tabs=`<div class="vtabs"><button class="vtab${tab==='v'?' on':''}" onclick="setTab(${vi},'v')">Ventes<i>${vm.length}</i></button><button class="vtab ann${tab==='a'?' on':''}" onclick="setTab(${vi},'a')">Annulations<i>${an.length}</i></button></div>`;
+    const body=tab==='v'
+      ?(vm.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>')
+      :(an.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>STATUT</th><th></th><th></th></tr></thead><tbody>${rowsA}</tbody></table>`:'<div class="emsg">Aucune annulation ce mois</div>');
+    return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.nom}</b>${tabs}<div class="vshst"><span>${fE(mg)}</span><span>${vm.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${body}</div>`;
   }).join('');
 }
 
@@ -543,7 +565,7 @@ function chMois(d){S.mois+=d;if(S.mois<0){S.mois=11;S.annee--;}if(S.mois>11){S.m
 // ── MODAL ──
 function rmModal(){
   ['fd','fm','fi2','fcl','fmg'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('fmy').value='';document.getElementById('ffa').value='';
+  document.getElementById('fmy').value='';document.getElementById('ffa').value='';document.getElementById('fan').value='';
   document.getElementById('eidx').value='';document.getElementById('bdel').style.display='none';
   document.querySelectorAll('.ck input').forEach(cb=>{cb.checked=false;cb.closest('.ck').classList.remove('on');});
 }
@@ -555,7 +577,7 @@ function oEdit(vi,idx){
   document.getElementById('mtit').textContent='Modifier — '+S.vendeurs[vi].nom;
   document.getElementById('fd').value=vt.date||'';document.getElementById('fm').value=vt.modele||'';
   document.getElementById('fi2').value=vt.immat||'';document.getElementById('fcl').value=vt.client||'';
-  document.getElementById('fmg').value=vt.marge||'';document.getElementById('fmy').value=vt.myana||'';
+  document.getElementById('fmg').value=vt.marge||'';document.getElementById('fmy').value=vt.myana==='annule'?'':(vt.myana||'');document.getElementById('fan').value=vt.myana==='annule'?'annule':'';
   document.getElementById('ffa').value=vt.facture?'oui':'';
   sc('xfi',vt.fi);sc('xma',vt.mad);sc('xbu',vt.bulbee);sc('xco',vt.coyote);sc('xpr',vt.protech);
   sc('xeu',vt.euro);sc('xce',vt.cession);sc('xre',vt.reprise);sc('xvo',vt.voe);sc('xpl',vt.plus120);
@@ -568,7 +590,7 @@ async function savV(){
   const obj={
     date:document.getElementById('fd').value.trim(),modele:document.getElementById('fm').value.trim(),
     immat:document.getElementById('fi2').value.trim().toUpperCase(),client:document.getElementById('fcl').value.trim(),
-    marge:parseFloat(document.getElementById('fmg').value)||0,myana:document.getElementById('fmy').value,
+    marge:parseFloat(document.getElementById('fmg').value)||0,myana:document.getElementById('fan').value==='annule'?'annule':document.getElementById('fmy').value,
     facture:document.getElementById('ffa').value==='oui',
     fi:document.getElementById('xfi').checked,mad:document.getElementById('xma').checked,
     bulbee:document.getElementById('xbu').checked,coyote:document.getElementById('xco').checked,
@@ -708,7 +730,7 @@ async function dedupe(){
   const key=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   const groups=new Map();
   S.vendeurs.forEach((v,vi)=>v.ventes.forEach(x=>{
-    const k=key(x.immat);if(!k)return;
+    const k=key(x.immat);if(!k||isAnn(x))return;
     if(!groups.has(k))groups.set(k,[]);
     groups.get(k).push({v,vi,x});
   }));
