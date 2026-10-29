@@ -70,7 +70,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .vsg{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#E5E5E0}
 .vs{background:#fff;padding:9px 5px;text-align:center}
 .vsv{font-size:16px;font-weight:700}
-.vsv.pos{color:#2D7A4F}.vsv.red{color:#C0392B}
+.vsv.pos{color:#2D7A4F}.vsv.red{color:#C0392B}.vsv.sm{font-size:13px;line-height:20px}
 .vsl{font-size:7px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-top:2px}
 .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(75px,1fr));gap:7px}
 .cs{background:#fff;border:1px solid #E5E5E0;border-radius:9px;padding:10px 6px;text-align:center;position:relative;overflow:hidden}
@@ -500,10 +500,12 @@ function rProg(){
 function rCards(){
   document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>{
     const vm=vCdeV(i),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
+    const ca=vm.filter(x=>x.fi).reduce((s,x)=>s+(x.ca||0),0); // même calcul que « Décaiss. FI » du bandeau
     return`<div class="vc"><div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
     <div class="vsg">
       <div class="vs"><div class="vsv${nb>0?' pos':''}">${nb}</div><div class="vsl">VENTES</div></div>
       <div class="vs"><div class="vsv">${g('fi')}</div><div class="vsl">FI</div></div>
+      <div class="vs"><div class="vsv sm">${ca>0?Math.round(ca).toLocaleString('fr-FR')+' €':'—'}</div><div class="vsl">DÉCAISS. FI</div></div>
       <div class="vs"><div class="vsv">${g('mad')}</div><div class="vsl">MAD</div></div>
       <div class="vs"><div class="vsv">${g('coyote')}</div><div class="vsl">COYOTE</div></div>
       <div class="vs"><div class="vsv">${g('protech')}</div><div class="vsl">PROTECH</div></div>
