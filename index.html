@@ -709,7 +709,10 @@ function importXL(file, moisCible){
           const ex=imKey(immat)?parIm.get(imKey(immat)):null;
           if(ex){
             // Vente déjà connue : on met à jour avec l'Excel, en gardant le suivi My Ana saisi dans l'appli
-            Object.assign(ex,nouv,{myana:ex.myana||''});
+            // On garde la date de commande déjà en place (texte + mois/année de commande) : l'import ne la modifie pas
+            Object.assign(ex,nouv,{myana:ex.myana||'',date:ex.date||nouv.date,
+              moisCde:(ex.moisCde!==undefined&&ex.moisCde!==null)?ex.moisCde:nouv.moisCde,
+              anneeCde:ex.anneeCde||nouv.anneeCde});
             nbMaj++;
           } else {
             vend.ventes.push(nouv);
