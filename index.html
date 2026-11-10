@@ -39,7 +39,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .sbtn{border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 .sbtn.save{background:#1A1A1A;color:#fff}
 .sbtn.reset{background:#FDECEA;color:#C0392B}
-.obj{display:grid;grid-template-columns:190px 1fr 190px;gap:20px;align-items:center}
+.obj{display:grid;grid-template-columns:170px 1.1fr 1.2fr 170px;gap:20px;align-items:center}
 .olbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#999;margin-bottom:6px}
 .oinput{width:74px;padding:7px 9px;border:1.5px solid #E5E5E0;border-radius:8px;font-size:18px;font-weight:700;font-family:'Inter',sans-serif;text-align:center}
 .oinput:focus{outline:none;border-color:#1B2D5B}
@@ -159,7 +159,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
   </div>
   <div class="card obj">
     <div>
-      <div class="olbl">Objectif mensuel</div>
+      <div class="olbl">Facture mensuelle</div>
       <div><input type="number" class="oinput" id="oi" value="50" min="1" onchange="updObj()"><span style="font-size:12px;color:#999;margin-left:5px">véhicules</span></div>
       <div style="font-size:10px;color:#999;margin-top:5px" id="or">—</div>
     </div>
@@ -174,6 +174,24 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
         <span>✅ <b id="sr">0</b> réalisées</span>
         <span>🔴 <b id="sre">0</b> restantes</span>
         <span>📈 <b id="srt">—</b> vte/jour</span>
+      </div>
+    </div>
+    <div>
+      <div class="olbl">Marge mensuelle dégagée</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:10px;color:#999">Objectif</span>
+        <input type="number" class="oinput" id="omi" min="0" step="1000" placeholder="0" onchange="updObjM()" style="width:100px;font-size:14px;padding:5px 7px"><span style="font-size:12px;color:#999">€</span>
+      </div>
+      <div class="onums">
+        <span class="ocur" id="mc" style="font-size:22px">0 €</span><span class="osep">/</span>
+        <span class="otot" id="mt" style="font-size:13px">—</span>
+        <span class="opct" id="mp">—</span>
+      </div>
+      <div class="pbg"><div class="pfill" id="mf" style="width:0%"></div></div>
+      <div class="osub">
+        <span>🔴 <b id="mr">—</b> restants</span>
+        <span>👥 <b id="mv">—</b> vendeurs</span>
+        <span>➕ <b id="mx">—</b> autres</span>
       </div>
     </div>
     <div>
@@ -261,7 +279,7 @@ const EXCEL = {"CHAUMONT": [{"date": "Jeu 1", "modele": "SWIFT", "immat": "GW-68
 
 // ── ÉTAT ──
 const _now = new Date();
-let S = {obj:50, objDef:50, objs:{}, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}))};
+let S = {obj:50, objDef:50, objs:{}, objM:{}, extra:{}, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}))};
 
 // ── SUPABASE (synchro multi-appareils) ──
 // Principe : chaque vente = une ligne en base, repérée par son id. On n'envoie que ce qui a changé
@@ -273,13 +291,22 @@ let _busy=false, _del=[], _cfgId=null, _cfgSig='', _seq=0, _lastRemote='', _load
 // Objectif par mois : S.objs = {'2026-9':50,...} ; S.objDef = valeur par défaut (ancien objectif unique)
 function objKey(a,m){return a+'-'+m;}
 function objFor(a,m){const v=S.objs[objKey(a,m)];return (v!==undefined&&v!==null)?v:S.objDef;}
-function cfgStr(){return JSON.stringify({def:S.objDef,m:S.objs});}
+function cfgStr(){return JSON.stringify({def:S.objDef,m:S.objs,mo:S.objM,ex:S.extra});}
 function parseCfg(txt){
   try{const o=JSON.parse(txt);
-    if(o&&typeof o==='object'&&o.m)return {def:parseInt(o.def)||50,m:o.m};
-    if(typeof o==='number')return {def:o||50,m:{}};
+    if(o&&typeof o==='object'&&o.m)return {def:parseInt(o.def)||50,m:o.m,mo:o.mo||{},ex:o.ex||{}};
+    if(typeof o==='number')return {def:o||50,m:{},mo:{},ex:{}};
   }catch(e){}
-  return {def:parseInt(txt)||50,m:{}};
+  return {def:parseInt(txt)||50,m:{},mo:{},ex:{}};
+}
+// Marge mensuelle dégagée = marge des ventes facturées du mois (vendeurs suivis, en direct)
+// + marge des autres vendeurs de l'Excel (Cession, Alcopa, Marchand, Direction…) mémorisée à l'import
+function margeVend(){return vFact().reduce((s,x)=>s+(x.marge||0),0);}
+function margeAutres(){return S.extra[objKey(S.annee,S.mois)]||0;}
+function eur(n){return Math.round(n).toLocaleString('fr-FR')+' €';}
+async function updObjM(){
+  S.objM[objKey(S.annee,S.mois)]=parseFloat(document.getElementById('omi').value)||0;
+  rProg();await saveAll();
 }
 function rowOf(v,vt){
   return {
@@ -322,9 +349,10 @@ function applyRows(rows){
     _cfgId=cfg.id;
     const el=document.getElementById('oi');
     const pc=parseCfg(cfg.modele);
-    _cfgSig=JSON.stringify({def:pc.def,m:pc.m});
-    // Si vous êtes en train de taper dans le champ objectif, on ne l'écrase pas
-    if(!(el&&document.activeElement===el)){S.objDef=pc.def;S.objs=pc.m;S.obj=objFor(S.annee,S.mois);}
+    _cfgSig=JSON.stringify({def:pc.def,m:pc.m,mo:pc.mo,ex:pc.ex});
+    // Si vous êtes en train de taper dans un champ objectif, on ne l'écrase pas
+    const el2=document.getElementById('omi');
+    if(!((el&&document.activeElement===el)||(el2&&document.activeElement===el2))){S.objDef=pc.def;S.objs=pc.m;S.objM=pc.mo;S.extra=pc.ex;S.obj=objFor(S.annee,S.mois);}
   }
   S.vendeurs = VDEF.map(v=>{
     const nv={...v,ventes:[]};
@@ -450,7 +478,7 @@ async function resetAll(){
   if(!confirm('Réinitialiser depuis les données Excel ?')) return;
   S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(x._id!=null)_del.push(x._id);}));
   S.vendeurs = VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}));
-  const n=new Date();S.objDef=50;S.objs={};S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
+  const n=new Date();S.objDef=50;S.objs={};S.objM={};S.extra={};S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
   render();
   await saveAll();
 }
@@ -498,6 +526,19 @@ function rProg(){
   document.getElementById('dt').textContent=jo.tot;
   document.getElementById('or').textContent=(jo.ec?Math.round(nb/jo.ec*100)/100:'—')+' vte/jour';
   document.getElementById('srt').textContent=(jo.re&&(obj-nb)>0?Math.round((obj-nb)/jo.re*100)/100:'—');
+  // --- Marge mensuelle ---
+  const mv=margeVend(),mx=margeAutres(),mtot=mv+mx,mobj=S.objM[objKey(S.annee,S.mois)]||0;
+  const mpct=mobj>0?Math.max(0,Math.min(Math.round(mtot/mobj*100),100)):0,mok=mobj>0&&mtot>=mobj;
+  document.getElementById('omi').value=mobj||'';
+  document.getElementById('mc').textContent=eur(mtot);
+  document.getElementById('mt').textContent=mobj>0?eur(mobj):'objectif à saisir';
+  document.getElementById('mp').textContent=mobj>0?mpct+'%':'—';
+  document.getElementById('mp').className='opct'+(mok?' ok':'');
+  document.getElementById('mf').style.width=mpct+'%';
+  document.getElementById('mf').className='pfill'+(mok?' ok':'');
+  document.getElementById('mr').textContent=mobj>0?eur(Math.max(0,mobj-mtot)):'—';
+  document.getElementById('mv').textContent=eur(mv);
+  document.getElementById('mx').textContent=eur(mx);
 }
 
 function rCards(){
@@ -619,6 +660,12 @@ function cif(e){if(e.target.id==='ov')cov();}
 document.querySelectorAll('.ck input').forEach(cb=>cb.addEventListener('change',()=>cb.closest('.ck').classList.toggle('on',cb.checked)));
 
 // ── IMPORT EXCEL ──
+function xlYM(df){
+  if(df instanceof Date){const d=fixXLDate(df);return {mois:d.getMonth(),annee:d.getFullYear()};}
+  if(typeof df==='string'){const m=df.match(/(\d{4})-(\d{2})-(\d{2})/);return m?{mois:parseInt(m[2])-1,annee:parseInt(m[1])}:null;}
+  if(typeof df==='number'){const d=new Date(Date.UTC(1899,11,30));d.setUTCDate(d.getUTCDate()+Math.floor(df));return {mois:d.getUTCMonth(),annee:d.getUTCFullYear()};}
+  return null;
+}
 function fixXLDate(d){
   // Les dates Excel arrivent parfois décalées de quelques minutes ou d'1 h (heure d'été/hiver).
   // Si on est à moins de 90 min d'un minuit, on se recale dessus pour ne jamais changer de jour/mois.
@@ -655,9 +702,26 @@ function importXL(file, moisCible){
       // Import non destructif : rien n'est supprimé. Les ventes déjà présentes (repérées par
       // l'immatriculation) sont mises à jour, les nouvelles sont ajoutées.
       const imKey=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+      // Une immatriculation peut figurer sur plusieurs ventes (véhicule revendu) : on garde la liste
       const parIm=new Map();
-      S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(imKey(x.immat))parIm.set(imKey(x.immat),x);}));
+      const addIm=x=>{const k=imKey(x.immat);if(!k)return;if(!parIm.has(k))parIm.set(k,[]);parIm.get(k).push(x);};
+      S.vendeurs.forEach(v=>v.ventes.forEach(addIm));
+      const ownerOf=x=>S.vendeurs.find(v=>v.ventes.includes(x));
       let nb=0,nbMaj=0;const vues=new Set();
+      // Marge (colonne MARGE REELLE HT) des vendeurs non suivis dans l'appli (Cession, Alcopa, Marchand, Direction…),
+      // par mois de facture : elle sert à calculer la marge mensuelle dégagée de toute l'équipe
+      const extraAcc={};
+      for(let i=hi+1;i<rows.length;i++){
+        const r=rows[i];if(!r)continue;
+        const vn=String(r[iV]||'').trim().toUpperCase();
+        if(!vn||VNOMS.includes(vn))continue;
+        if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
+        const ym=r[iF]?xlYM(r[iF]):null;if(!ym)continue;
+        if(moisCible!==null&&(ym.mois!==moisCible||ym.annee!==S.annee))continue;
+        const kk=objKey(ym.annee,ym.mois);extraAcc[kk]=(extraAcc[kk]||0)+(parseFloat(r[iM])||0);
+      }
+      if(moisCible!==null){const kk=objKey(S.annee,moisCible);S.extra[kk]=Math.round((extraAcc[kk]||0)*100)/100;}
+      else Object.keys(extraAcc).forEach(kk=>{S.extra[kk]=Math.round(extraAcc[kk]*100)/100;});
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnom=String(r[iV]||'').trim().toUpperCase();
@@ -705,18 +769,29 @@ function importXL(file, moisCible){
             cession:String(r[iG]||'').toUpperCase().includes('OUI'),reprise:r[iRe]===1,voe:r[iLo]===1,
             plus120:nj>=120,ca,mois,annee,moisCde,anneeCde,
           };
-          if(imKey(immat))vues.add(imKey(immat));
-          const ex=imKey(immat)?parIm.get(imKey(immat)):null;
+          const kIm=imKey(immat);
+          if(kIm)vues.add(kIm+'|'+annee+'-'+mois+'|'+vnom);
+          // Quelle ligne existante correspond à cette facture ?
+          //  1) la même facture déjà importée (même immat, même mois de facture, même vendeur)
+          //  2) sinon une commande en attente (non facturée) passée avant cette facture
+          //  Jamais une vente déjà facturée à un autre mois ou par un autre vendeur : c'est une autre vente.
+          const cands=kIm?(parIm.get(kIm)||[]).filter(x=>!isAnn(x)):[];
+          const ex=cands.find(x=>x.facture&&parseInt(x.mois)===mois&&parseInt(x.annee)===annee&&ownerOf(x)===vend)
+                 ||cands.find(x=>!x.facture&&((parseInt(x.anneeCde??x.annee)*12+parseInt(x.moisCde??x.mois))<=(annee*12+mois)))
+                 ||null;
           if(ex){
             // Vente déjà connue : on met à jour avec l'Excel, en gardant le suivi My Ana saisi dans l'appli
             // On garde la date de commande déjà en place (texte + mois/année de commande) : l'import ne la modifie pas
             Object.assign(ex,nouv,{myana:ex.myana||'',date:ex.date||nouv.date,
               moisCde:(ex.moisCde!==undefined&&ex.moisCde!==null)?ex.moisCde:nouv.moisCde,
               anneeCde:ex.anneeCde||nouv.anneeCde});
+            // Si la commande était rangée chez un autre vendeur, on la déplace chez le vendeur de l'Excel
+            const ow=ownerOf(ex);
+            if(ow&&ow!==vend){ow.ventes.splice(ow.ventes.indexOf(ex),1);vend.ventes.push(ex);}
             nbMaj++;
           } else {
             vend.ventes.push(nouv);
-            if(imKey(immat))parIm.set(imKey(immat),nouv);
+            addIm(nouv);
             nb++;
           }
         }
@@ -730,7 +805,7 @@ function importXL(file, moisCible){
         if(!x.facture||isAnn(x))return;
         if(moisCible!==null&&!(parseInt(x.mois)===moisCible&&parseInt(x.annee)===S.annee))return;
         const k=imKey(x.immat);
-        if(k&&vues.has(k))return;
+        if(k&&vues.has(k+'|'+x.annee+'-'+x.mois+'|'+v.nom))return;
         orph.push({v,x});
       }));
       if(orph.length){
@@ -751,19 +826,31 @@ document.getElementById('impA').addEventListener('change',e=>{if(e.target.files[
 // Détecte les ventes en double (même immatriculation, tirets/espaces ignorés) et propose de les fusionner
 async function dedupe(){
   const key=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  // Deux lignes sont la même vente si : même immatriculation, même vendeur, et
+  //  - toutes deux facturées le même mois, ou
+  //  - toutes deux en attente, commandées le même mois, ou
+  //  - l'une en attente, l'autre facturée, commandées le même mois.
+  // Un véhicule revendu (autre mois de facture) n'est PAS un doublon.
+  const sameSale=(a,b)=>{
+    if(a.facture&&b.facture)return parseInt(a.mois)===parseInt(b.mois)&&parseInt(a.annee)===parseInt(b.annee);
+    return parseInt(a.moisCde??a.mois)===parseInt(b.moisCde??b.mois)&&parseInt(a.anneeCde??a.annee)===parseInt(b.anneeCde??b.annee);
+  };
   const groups=new Map();
   S.vendeurs.forEach((v,vi)=>v.ventes.forEach(x=>{
     const k=key(x.immat);if(!k||isAnn(x))return;
-    if(!groups.has(k))groups.set(k,[]);
-    groups.get(k).push({v,vi,x});
+    const gk=k+'|'+vi;
+    if(!groups.has(gk))groups.set(gk,[]);
+    groups.get(gk).push({v,vi,x});
   }));
-  const plans=[...groups.values()].filter(g=>g.length>1).map(g=>{
-    // On garde la ligne facturée si elle existe (sinon la première), on supprime les autres
-    const sorted=[...g].sort((a,b)=>(b.x.facture?1:0)-(a.x.facture?1:0));
-    return {keep:sorted[0],drop:sorted.slice(1)};
+  const plans=[];
+  groups.forEach(g=>{
+    const sorted=[...g].sort((a,b)=>(b.x.facture?1:0)-(a.x.facture?1:0)); // les facturées d'abord
+    const clusters=[];
+    sorted.forEach(it=>{const c=clusters.find(c=>sameSale(c[0].x,it.x));if(c)c.push(it);else clusters.push([it]);});
+    clusters.filter(c=>c.length>1).forEach(c=>plans.push({keep:c[0],drop:c.slice(1)}));
   });
   const n=plans.reduce((t,p)=>t+p.drop.length,0);
-  if(!n){alert('Aucun doublon trouvé (même immatriculation).');return;}
+  if(!n){alert('Aucun doublon trouvé (même immatriculation, même vendeur, même vente).');return;}
   const ex=plans.slice(0,10).map(p=>'• '+p.keep.x.immat+' · '+(p.keep.x.client||'—')+' ('+p.keep.v.nom+') ×'+(p.drop.length+1)).join('\n');
   if(!confirm(n+' ligne'+(n>1?'s':'')+' en double à supprimer ('+plans.length+' véhicule'+(plans.length>1?'s':'')+').\nOn garde la ligne facturée et on conserve le suivi My Ana.\n\n'+ex+(plans.length>10?'\n…':'')+'\n\nContinuer ?'))return;
   plans.forEach(p=>p.drop.forEach(d=>{
