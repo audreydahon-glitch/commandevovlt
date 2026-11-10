@@ -300,7 +300,7 @@ function parseCfg(txt){
   return {def:parseInt(txt)||50,m:{},mo:{},ex:{}};
 }
 // Marge mensuelle dégagée = marge des ventes facturées du mois (vendeurs suivis, en direct)
-// + marge des autres vendeurs de l'Excel (Cession, Alcopa, Marchand, Direction…) mémorisée à l'import
+// + marge Cession / Alcopa / Marchand de l'Excel, mémorisée à l'import (Direction, Mottas et BDC ne sont pas comptés)
 function margeVend(){return vFact().reduce((s,x)=>s+(x.marge||0),0);}
 function margeAutres(){return S.extra[objKey(S.annee,S.mois)]||0;}
 function eur(n){return Math.round(n).toLocaleString('fr-FR')+' €';}
@@ -708,13 +708,13 @@ function importXL(file, moisCible){
       S.vendeurs.forEach(v=>v.ventes.forEach(addIm));
       const ownerOf=x=>S.vendeurs.find(v=>v.ventes.includes(x));
       let nb=0,nbMaj=0;const vues=new Set();
-      // Marge (colonne MARGE REELLE HT) des vendeurs non suivis dans l'appli (Cession, Alcopa, Marchand, Direction…),
+      // Marge (colonne MARGE REELLE HT) des lignes Cession, Alcopa et Marchand (non suivies en cartes vendeur),
       // par mois de facture : elle sert à calculer la marge mensuelle dégagée de toute l'équipe
-      const extraAcc={};
+      const extraAcc={};const VEXTRA=['CESSION','MARCHAND','ALCOPA'];
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vn=String(r[iV]||'').trim().toUpperCase();
-        if(!vn||VNOMS.includes(vn))continue;
+        if(!VEXTRA.includes(vn))continue; // seulement Cession, Marchand, Alcopa (pas Direction, Mottas, BDC)
         if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
         const ym=r[iF]?xlYM(r[iF]):null;if(!ym)continue;
         if(moisCible!==null&&(ym.mois!==moisCible||ym.annee!==S.annee))continue;
