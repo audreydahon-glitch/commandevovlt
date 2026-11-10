@@ -39,7 +39,13 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .sbtn{border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 .sbtn.save{background:#1A1A1A;color:#fff}
 .sbtn.reset{background:#FDECEA;color:#C0392B}
-.obj{display:grid;grid-template-columns:170px 1.1fr 1.2fr 170px;gap:20px;align-items:center}
+.obj{display:grid;grid-template-columns:1fr 1.15fr 175px;gap:0;align-items:start}
+.oblk{padding:0 26px;min-width:0}.oblk:first-child{padding-left:0}.oblk:last-child{padding-right:0}
+.oblk+.oblk{border-left:1px solid #EEEEEA}
+.orow{display:flex;align-items:center;gap:8px;margin-bottom:12px;min-height:38px}
+.orow .oinput{font-size:15px;padding:6px 9px}
+.olab,.ounit{font-size:11px;color:#999}
+.ohint{margin-left:auto;font-size:10px;color:#999;white-space:nowrap}
 .olbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#999;margin-bottom:6px}
 .oinput{width:74px;padding:7px 9px;border:1.5px solid #E5E5E0;border-radius:8px;font-size:18px;font-weight:700;font-family:'Inter',sans-serif;text-align:center}
 .oinput:focus{outline:none;border-color:#1B2D5B}
@@ -129,7 +135,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .btnp{background:#1B2D5B;color:#fff}
 .btns{background:#F2F2F0;color:#1A1A1A;border:1px solid #E5E5E0}
 .btnd{background:#FDECEA;color:#C0392B}
-@media(max-width:768px){.obj{grid-template-columns:1fr}.vgrid{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){.obj{grid-template-columns:1fr}.oblk{padding:0}.oblk+.oblk{border-left:0;border-top:1px solid #EEEEEA;padding-top:14px;margin-top:14px}.vgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:500px){.vgrid{grid-template-columns:1fr}.ckg{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -158,12 +164,9 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
     </div>
   </div>
   <div class="card obj">
-    <div>
+    <div class="oblk">
       <div class="olbl">Facture mensuelle</div>
-      <div><input type="number" class="oinput" id="oi" value="50" min="1" onchange="updObj()"><span style="font-size:12px;color:#999;margin-left:5px">véhicules</span></div>
-      <div style="font-size:10px;color:#999;margin-top:5px" id="or">—</div>
-    </div>
-    <div>
+      <div class="orow"><span class="olab">Objectif</span><input type="number" class="oinput" id="oi" value="50" min="1" onchange="updObj()" style="width:84px"><span class="ounit">véhicules</span><span class="ohint" id="or">—</span></div>
       <div class="onums">
         <span class="ocur" id="oc">0</span><span class="osep">/</span>
         <span class="otot" id="ot">50 ventes</span>
@@ -176,15 +179,12 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
         <span>📈 <b id="srt">—</b> vte/jour</span>
       </div>
     </div>
-    <div>
+    <div class="oblk">
       <div class="olbl">Marge mensuelle dégagée</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="font-size:10px;color:#999">Objectif</span>
-        <input type="number" class="oinput" id="omi" min="0" step="1000" placeholder="0" onchange="updObjM()" style="width:100px;font-size:14px;padding:5px 7px"><span style="font-size:12px;color:#999">€</span>
-      </div>
+      <div class="orow"><span class="olab">Objectif</span><input type="number" class="oinput" id="omi" min="0" step="1000" placeholder="0" onchange="updObjM()" style="width:118px"><span class="ounit">€</span></div>
       <div class="onums">
-        <span class="ocur" id="mc" style="font-size:22px">0 €</span><span class="osep">/</span>
-        <span class="otot" id="mt" style="font-size:13px">—</span>
+        <span class="ocur" id="mc">0 €</span><span class="osep">/</span>
+        <span class="otot" id="mt">—</span>
         <span class="opct" id="mp">—</span>
       </div>
       <div class="pbg"><div class="pfill" id="mf" style="width:0%"></div></div>
@@ -194,9 +194,9 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
         <span>➕ <b id="mx">—</b> autres</span>
       </div>
     </div>
-    <div>
-      <div class="dlbl">Jours ouvrés (Lun-Sam)</div>
-      <div class="dgrid">
+    <div class="oblk">
+      <div class="olbl">Jours ouvrés (Lun-Sam)</div>
+      <div class="dgrid" style="margin-top:6px">
         <div class="ditem"><div class="dval" id="de">—</div><div class="dlbl2">Écoulés</div></div>
         <div class="ditem"><div class="dval" id="dr">—</div><div class="dlbl2">Restants</div></div>
         <div class="ditem"><div class="dval" id="dt">—</div><div class="dlbl2">Total</div></div>
