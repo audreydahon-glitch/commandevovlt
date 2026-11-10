@@ -157,7 +157,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
     </div>
   </div>
   <div class="card sbar">
-    <div><h4>Données suivi VO</h4><p id="sst">Chargement...</p><p style="font-size:10px;color:#bbb;margin-top:2px">Version du 03/11/2026</p></div>
+    <div><h4>Données suivi VO</h4><p id="sst">Chargement...</p><p style="font-size:10px;color:#bbb;margin-top:2px">Version du 10/11/2026</p></div>
     <div style="display:flex;gap:7px">
       <button class="sbtn reset" onclick="resetAll()">🗑 Réinitialiser</button>
       <button class="sbtn save" onclick="saveAll()">💾 Sauvegarder</button>
@@ -279,7 +279,7 @@ const EXCEL = {"CHAUMONT": [{"date": "Jeu 1", "modele": "SWIFT", "immat": "GW-68
 
 // ── ÉTAT ──
 const _now = new Date();
-let S = {obj:50, objDef:50, objs:{}, objM:{}, extra:{}, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}))};
+let S = {obj:50, objDef:50, objs:{}, objM:{}, extra:{}, mxl:{}, mois:_now.getMonth(), annee:_now.getFullYear(), vendeurs:VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}))};
 
 // ── SUPABASE (synchro multi-appareils) ──
 // Principe : chaque vente = une ligne en base, repérée par son id. On n'envoie que ce qui a changé
@@ -291,16 +291,16 @@ let _busy=false, _del=[], _cfgId=null, _cfgSig='', _seq=0, _lastRemote='', _load
 // Objectif par mois : S.objs = {'2026-9':50,...} ; S.objDef = valeur par défaut (ancien objectif unique)
 function objKey(a,m){return a+'-'+m;}
 function objFor(a,m){const v=S.objs[objKey(a,m)];return (v!==undefined&&v!==null)?v:S.objDef;}
-function cfgStr(){return JSON.stringify({def:S.objDef,m:S.objs,mo:S.objM,ex:S.extra});}
+function cfgStr(){return JSON.stringify({def:S.objDef,m:S.objs,mo:S.objM,ex:S.extra,xl:S.mxl});}
 function parseCfg(txt){
   try{const o=JSON.parse(txt);
-    if(o&&typeof o==='object'&&o.m)return {def:parseInt(o.def)||50,m:o.m,mo:o.mo||{},ex:o.ex||{}};
-    if(typeof o==='number')return {def:o||50,m:{},mo:{},ex:{}};
+    if(o&&typeof o==='object'&&o.m)return {def:parseInt(o.def)||50,m:o.m,mo:o.mo||{},ex:o.ex||{},xl:o.xl||{}};
+    if(typeof o==='number')return {def:o||50,m:{},mo:{},ex:{},xl:{}};
   }catch(e){}
-  return {def:parseInt(txt)||50,m:{},mo:{},ex:{}};
+  return {def:parseInt(txt)||50,m:{},mo:{},ex:{},xl:{}};
 }
 // Marge mensuelle dégagée = marge des ventes facturées du mois (vendeurs suivis, en direct)
-// + marge Cession / Alcopa / Marchand de l'Excel, mémorisée à l'import (Direction, Mottas et BDC ne sont pas comptés)
+// + marge des autres vendeurs de l'Excel (Cession, Alcopa, Marchand, Direction…) mémorisée à l'import
 function margeVend(){return vFact().reduce((s,x)=>s+(x.marge||0),0);}
 function margeAutres(){return S.extra[objKey(S.annee,S.mois)]||0;}
 function eur(n){return Math.round(n).toLocaleString('fr-FR')+' €';}
@@ -349,10 +349,10 @@ function applyRows(rows){
     _cfgId=cfg.id;
     const el=document.getElementById('oi');
     const pc=parseCfg(cfg.modele);
-    _cfgSig=JSON.stringify({def:pc.def,m:pc.m,mo:pc.mo,ex:pc.ex});
+    _cfgSig=JSON.stringify({def:pc.def,m:pc.m,mo:pc.mo,ex:pc.ex,xl:pc.xl});
     // Si vous êtes en train de taper dans un champ objectif, on ne l'écrase pas
     const el2=document.getElementById('omi');
-    if(!((el&&document.activeElement===el)||(el2&&document.activeElement===el2))){S.objDef=pc.def;S.objs=pc.m;S.objM=pc.mo;S.extra=pc.ex;S.obj=objFor(S.annee,S.mois);}
+    if(!((el&&document.activeElement===el)||(el2&&document.activeElement===el2))){S.objDef=pc.def;S.objs=pc.m;S.objM=pc.mo;S.extra=pc.ex;S.mxl=pc.xl;S.obj=objFor(S.annee,S.mois);}
   }
   S.vendeurs = VDEF.map(v=>{
     const nv={...v,ventes:[]};
@@ -478,7 +478,7 @@ async function resetAll(){
   if(!confirm('Réinitialiser depuis les données Excel ?')) return;
   S.vendeurs.forEach(v=>v.ventes.forEach(x=>{if(x._id!=null)_del.push(x._id);}));
   S.vendeurs = VDEF.map(v=>({...v,ventes:(EXCEL[v.nom]||[]).map(x=>({...x}))}));
-  const n=new Date();S.objDef=50;S.objs={};S.objM={};S.extra={};S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
+  const n=new Date();S.objDef=50;S.objs={};S.objM={};S.extra={};S.mxl={};S.obj=50;S.mois=n.getMonth();S.annee=n.getFullYear();
   render();
   await saveAll();
 }
@@ -491,6 +491,10 @@ function isAnn(x){return x.myana==='annule';}
 function vFact(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>x.facture===true&&!isAnn(x)&&parseInt(x.mois)===S.mois&&parseInt(x.annee)===S.annee));}
 function vCde(){return S.vendeurs.flatMap(v=>v.ventes.filter(x=>!isAnn(x)&&parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee));}
 function vCdeV(vi){return S.vendeurs[vi].ventes.filter(x=>!isAnn(x)&&parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee);}
+// Marge facturée du mois (même base que « Marge mensuelle dégagée ») et marge en attente de facturation
+function vFactV(vi){return S.vendeurs[vi].ventes.filter(x=>x.facture===true&&!isAnn(x)&&parseInt(x.mois)===S.mois&&parseInt(x.annee)===S.annee);}
+function vPendV(vi){const ref=S.annee*12+S.mois;return S.vendeurs[vi].ventes.filter(x=>!x.facture&&!isAnn(x)&&(parseInt(x.anneeCde??x.annee)*12+parseInt(x.moisCde??x.mois))<=ref);}
+function sumM(a){return a.reduce((s,x)=>s+(x.marge||0),0);}
 function vAnnV(vi){return S.vendeurs[vi].ventes.filter(x=>isAnn(x)&&parseInt(x.moisCde??x.mois)===S.mois&&parseInt(x.anneeCde??x.annee)===S.annee);}
 
 // ── RENDER ──
@@ -527,7 +531,10 @@ function rProg(){
   document.getElementById('or').textContent=(jo.ec?Math.round(nb/jo.ec*100)/100:'—')+' vte/jour';
   document.getElementById('srt').textContent=(jo.re&&(obj-nb)>0?Math.round((obj-nb)/jo.re*100)/100:'—');
   // --- Marge mensuelle ---
-  const mv=margeVend(),mx=margeAutres(),mtot=mv+mx,mobj=S.objM[objKey(S.annee,S.mois)]||0;
+  const kx=objKey(S.annee,S.mois),hasXL=S.mxl[kx]!==undefined&&S.mxl[kx]!==null;
+  // Marge dégagée = somme de la colonne M (MARGE REELLE HT) de l'onglet VO pour toutes les lignes facturées dans le mois.
+  // Tant qu'aucun Excel n'a été importé pour ce mois, on retombe sur le calcul depuis les ventes saisies.
+  const mx=margeAutres(),mtot=hasXL?S.mxl[kx]:margeVend()+mx,mv=mtot-mx,mobj=S.objM[objKey(S.annee,S.mois)]||0;
   const mpct=mobj>0?Math.max(0,Math.min(Math.round(mtot/mobj*100),100)):0,mok=mobj>0&&mtot>=mobj;
   document.getElementById('omi').value=mobj||'';
   document.getElementById('mc').textContent=eur(mtot);
@@ -543,9 +550,9 @@ function rProg(){
 
 function rCards(){
   document.getElementById('vgrid').innerHTML=S.vendeurs.map((v,i)=>{
-    const vm=vCdeV(i),mg=vm.reduce((s,x)=>s+(x.marge||0),0),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
+    const vm=vCdeV(i),mgF=sumM(vFactV(i)),mgP=sumM(vPendV(i)),nb=vm.length,g=k=>vm.filter(x=>x[k]).length;
     const ca=vm.filter(x=>x.fi).reduce((s,x)=>s+(x.ca||0),0); // même calcul que « Décaiss. FI » du bandeau
-    return`<div class="vc"><div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.nom}</div><div class="vmarge">${fE(mg)} marge</div></div></div>
+    return`<div class="vc"><div class="vch"><div class="av" style="background:${v.c}">${v.i}</div><div><div class="vname" onclick="renV(${i})">${v.lbl||v.nom}</div><div class="vmarge">${fE(mgF)} facturé · ${fE(mgP)} à fact.</div></div></div>
     <div class="vsg">
       <div class="vs"><div class="vsv${nb>0?' pos':''}">${nb}</div><div class="vsl">VENTES</div></div>
       <div class="vs"><div class="vsv">${g('fi')}</div><div class="vsl">FI</div></div>
@@ -567,7 +574,7 @@ function rCumul(){
   const vm=vCde(),g=k=>vm.filter(x=>x[k]).length;
   const ca=vm.filter(x=>x.fi).reduce((s,x)=>s+(x.ca||0),0);
   // Marge restante à facturer = marge des commandes du mois pas encore facturées (les factures faites se déduisent)
-  const mgp=vm.filter(x=>!x.facture).reduce((s,x)=>s+(x.marge||0),0);
+  const mgp=S.vendeurs.reduce((t,v,vi)=>t+sumM(vPendV(vi)),0);
   document.getElementById('cgrid').innerHTML=[
     {k:0,v:vm.length,l:'VENTES'},{k:1,v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
     {k:11,v:Math.round(mgp).toLocaleString('fr-FR')+' €',l:'MARGE À FACTURER',sm:true},
@@ -580,7 +587,7 @@ function rCumul(){
 
 function rVentes(){
   document.getElementById('vsecs').innerHTML=S.vendeurs.map((v,vi)=>{
-    const vm=vCdeV(vi),an=vAnnV(vi),mg=vm.reduce((s,x)=>s+(x.marge||0),0);
+    const vm=vCdeV(vi),an=vAnnV(vi),mgF=sumM(vFactV(vi)),mgP=sumM(vPendV(vi));
     // Toutes les lignes du mois (annulées comprises) dans leur ordre d'origine ; les annulées ne comptent dans aucun total
     const all=S.vendeurs[vi].ventes.filter(x=>vm.includes(x)||an.includes(x));
     const rows=all.map(vt=>{
@@ -590,11 +597,11 @@ function rVentes(){
       return`<tr${ann?' class="rann"':''}><td><span class="dot${vt.facture?'':' p'}"></span>${vt.date||'—'}</td><td><b>${vt.modele||'—'}</b></td><td style="font-family:monospace;font-size:10px;color:#999">${vt.immat||'—'}</td><td>${vt.client||'—'}</td><td>${mb}</td><td>${vt.ca>0?'<b>'+Math.round(vt.ca).toLocaleString('fr-FR')+' €</b>':'<span class="sn">—</span>'}</td><td>${my}</td><td>${vt.facture?'<span class="sv">Oui</span>':'<span class="sn">—</span>'}</td><td><button class="bmod" onclick="oEdit(${vi},${gi})">Modifier</button></td></tr>`;
     }).join('');
     const nAnn=an.length?`<span style="color:#B91C1C">${an.length} annulée${an.length>1?'s':''}</span>`:'';
-    return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.nom}</b><div class="vshst">${nAnn}<span>${fE(mg)}</span><span>${vm.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${all.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>FINANCÉ</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>'}</div>`;
+    return`<div class="vsec"><div class="vsh"><div class="av" style="background:${v.c};width:28px;height:28px;font-size:10px">${v.i}</div><b style="font-size:13px">${v.lbl||v.nom}</b><div class="vshst">${nAnn}<span>Fact. ${fE(mgF)}</span><span>À fact. ${fE(mgP)}</span><span>${vm.length} véh.</span></div><button class="badd" onclick="oAdd(${vi})">+ Ajouter</button></div>${all.length?`<table class="vtbl"><thead><tr><th>DATE</th><th>MODÈLE</th><th>IMMAT</th><th>CLIENT</th><th>MARGE</th><th>FINANCÉ</th><th>MY ANA</th><th>FACTURÉ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="emsg">Aucune vente ce mois</div>'}</div>`;
   }).join('');
 }
 
-function renV(vi){const n=prompt('Nouveau nom :',S.vendeurs[vi].nom);if(n&&n.trim()){S.vendeurs[vi].nom=n.trim().toUpperCase();S.vendeurs[vi].i=n.trim().toUpperCase().split(' ').map(w=>w[0]).join('').slice(0,2);render();}}
+function renV(vi){const v=S.vendeurs[vi];const n=prompt('Nom affiché :',v.lbl||v.nom);if(n&&n.trim()){v.lbl=n.trim().toUpperCase();v.i=v.lbl.split(' ').map(w=>w[0]).join('').slice(0,2);render();}}
 function chMois(d){S.mois+=d;if(S.mois<0){S.mois=11;S.annee--;}if(S.mois>11){S.mois=0;S.annee++;}S.obj=objFor(S.annee,S.mois);render();}
 
 // ── MODAL ──
@@ -708,20 +715,22 @@ function importXL(file, moisCible){
       S.vendeurs.forEach(v=>v.ventes.forEach(addIm));
       const ownerOf=x=>S.vendeurs.find(v=>v.ventes.includes(x));
       let nb=0,nbMaj=0;const vues=new Set();
-      // Marge (colonne MARGE REELLE HT) des lignes Cession, Alcopa et Marchand (non suivies en cartes vendeur),
+      // Marge (colonne MARGE REELLE HT) des vendeurs non suivis dans l'appli (Cession, Alcopa, Marchand, Direction…),
       // par mois de facture : elle sert à calculer la marge mensuelle dégagée de toute l'équipe
-      const extraAcc={};const VEXTRA=['CESSION','MARCHAND','ALCOPA'];
+      const extraAcc={},totAcc={};
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
-        const vn=String(r[iV]||'').trim().toUpperCase();
-        if(!VEXTRA.includes(vn))continue; // seulement Cession, Marchand, Alcopa (pas Direction, Mottas, BDC)
-        if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
         const ym=r[iF]?xlYM(r[iF]):null;if(!ym)continue;
         if(moisCible!==null&&(ym.mois!==moisCible||ym.annee!==S.annee))continue;
-        const kk=objKey(ym.annee,ym.mois);extraAcc[kk]=(extraAcc[kk]||0)+(parseFloat(r[iM])||0);
+        const kk=objKey(ym.annee,ym.mois),mgM=parseFloat(r[iM])||0;
+        totAcc[kk]=(totAcc[kk]||0)+mgM; // toutes les ventes facturées du mois, tous vendeurs
+        const vn=String(r[iV]||'').trim().toUpperCase();
+        if(!vn||VNOMS.includes(vn))continue;
+        if(r[iAN]&&String(r[iAN]).trim()!=='')continue;
+        extraAcc[kk]=(extraAcc[kk]||0)+mgM;
       }
-      if(moisCible!==null){const kk=objKey(S.annee,moisCible);S.extra[kk]=Math.round((extraAcc[kk]||0)*100)/100;}
-      else Object.keys(extraAcc).forEach(kk=>{S.extra[kk]=Math.round(extraAcc[kk]*100)/100;});
+      if(moisCible!==null){const kk=objKey(S.annee,moisCible);S.extra[kk]=Math.round((extraAcc[kk]||0)*100)/100;S.mxl[kk]=Math.round((totAcc[kk]||0)*100)/100;}
+      else{Object.keys(extraAcc).forEach(kk=>{S.extra[kk]=Math.round(extraAcc[kk]*100)/100;});Object.keys(totAcc).forEach(kk=>{S.mxl[kk]=Math.round(totAcc[kk]*100)/100;});}
       for(let i=hi+1;i<rows.length;i++){
         const r=rows[i];if(!r)continue;
         const vnom=String(r[iV]||'').trim().toUpperCase();
