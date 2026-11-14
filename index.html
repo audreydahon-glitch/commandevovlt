@@ -220,11 +220,11 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
     <div class="mbd">
       <input type="hidden" id="evi"><input type="hidden" id="eidx">
       <div class="f2">
-        <div class="fr"><label>Date</label><input type="text" id="fd" placeholder="Lun 2"></div>
+        <div class="fr"><label>Date</label><input type="text" id="fd" placeholder="JJ/MM/AAAA"></div>
         <div class="fr"><label>Modèle</label><input type="text" id="fm" placeholder="GLC 220 D"></div>
       </div>
       <div class="f2">
-        <div class="fr"><label>Immat</label><input type="text" id="fi2" placeholder="GN-338-HJ"></div>
+        <div class="fr"><label>Immat</label><input type="text" id="fi2" placeholder="GN-338-HJ" oninput="this.value=fmtImmat(this.value)" autocapitalize="characters" autocomplete="off"></div>
         <div class="fr"><label>Client</label><input type="text" id="fcl" placeholder="Nom client"></div>
       </div>
       <div class="f2">
@@ -611,7 +611,25 @@ function rmModal(){
   document.querySelectorAll('.ck input').forEach(cb=>{cb.checked=false;cb.closest('.ck').classList.remove('on');});
 }
 function sc(id,v){const el=document.getElementById(id);el.checked=!!v;el.closest('.ck').classList.toggle('on',!!v);}
-function oAdd(vi){rmModal();document.getElementById('evi').value=vi;document.getElementById('mtit').textContent='Ajouter — '+S.vendeurs[vi].nom;document.getElementById('ov').classList.add('open');}
+// Immatriculation : met en majuscules et ajoute les tirets au format AA-123-AA pendant la saisie
+// (les autres formats — anciennes plaques, WW, motos — sont seulement mis en majuscules)
+function fmtImmat(v){
+  const raw=String(v||'').toUpperCase();
+  const c=raw.replace(/[^A-Z0-9]/g,'');
+  if(/^[A-Z]{2}\d{0,3}[A-Z]{0,2}$/.test(c)){
+    let o=c.slice(0,2);
+    if(c.length>2)o+='-'+c.slice(2,5);
+    if(c.length>5)o+='-'+c.slice(5,7);
+    return o;
+  }
+  return raw;
+}
+function oAdd(vi){rmModal();
+  // Date du jour préremplie (JJ/MM/AAAA) quand on ajoute une commande dans le mois en cours
+  const nd=new Date();
+  if(S.mois===nd.getMonth()&&S.annee===nd.getFullYear())
+    document.getElementById('fd').value=String(nd.getDate()).padStart(2,'0')+'/'+String(nd.getMonth()+1).padStart(2,'0')+'/'+nd.getFullYear();
+  document.getElementById('evi').value=vi;document.getElementById('mtit').textContent='Ajouter — '+S.vendeurs[vi].nom;document.getElementById('ov').classList.add('open');}
 function oEdit(vi,idx){
   rmModal();const vt=S.vendeurs[vi].ventes[idx];
   document.getElementById('evi').value=vi;document.getElementById('eidx').value=idx;
@@ -630,7 +648,7 @@ async function savV(){
   const vi=parseInt(document.getElementById('evi').value);
   const obj={
     date:document.getElementById('fd').value.trim(),modele:document.getElementById('fm').value.trim(),
-    immat:document.getElementById('fi2').value.trim().toUpperCase(),client:document.getElementById('fcl').value.trim(),
+    immat:fmtImmat(document.getElementById('fi2').value.trim()),client:document.getElementById('fcl').value.trim(),
     marge:parseFloat(document.getElementById('fmg').value)||0,myana:document.getElementById('fan').value==='annule'?'annule':document.getElementById('fmy').value,
     facture:document.getElementById('ffa').value==='oui',
     fi:document.getElementById('xfi').checked,mad:document.getElementById('xma').checked,
