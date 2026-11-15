@@ -578,8 +578,9 @@ function rCumul(){
   document.getElementById('cgrid').innerHTML=[
     {k:0,v:vm.length,l:'VENTES'},{k:1,v:vm.filter(x=>x.myana==='valide').length,l:'MY ANA OK'},
     {k:11,v:Math.round(mgp).toLocaleString('fr-FR')+' €',l:'MARGE À FACTURER',sm:true},
-    {k:2,v:g('mad'),l:'MAD',sub:'IP MAD '+ip(g('mad'))},{k:3,v:g('fi'),l:'FI',sub:'IP FI '+(vm.length?Math.round(g('fi')/vm.length*100)+' %':'—')},
+    {k:3,v:g('fi'),l:'FI',sub:'IP FI '+(vm.length?Math.round(g('fi')/vm.length*100)+' %':'—')},
     {k:4,v:ca>0?Math.round(ca).toLocaleString('fr-FR')+' €':'—',l:'DÉCAISS. FI',sm:true},
+    {k:2,v:g('mad'),l:'MAD',sub:'IP MAD '+ip(g('mad'))},
     {k:5,v:g('coyote'),l:'COYOTE',sub:'IP COYOTE '+ip(g('coyote'))},{k:6,v:g('protech'),l:'PROTECH'},{k:7,v:g('bulbee'),l:'BULBEE',sub:'IP BULBEE '+ip(g('bulbee'))},{k:12,v:g('euro'),l:'EURODATACAR',sub:'IP EURO '+ip(g('euro'))},
     {k:8,v:g('cession'),l:'CESSION'},{k:9,v:g('voe'),l:'VOE'},{k:10,v:g('plus120'),l:'+120J'},
   ].map(it=>`<div class="cs c${it.k}"><div class="csv" style="${it.sm?'font-size:12px;':''}">${it.v}</div><div class="csl">${it.l}</div><div class="css"${it.sub?' style="color:#0D9488;font-weight:700;font-size:9px"':''}>${it.sub||'ce mois'}</div></div>`).join('');
