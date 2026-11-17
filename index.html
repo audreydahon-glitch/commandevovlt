@@ -83,7 +83,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
 .cs::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .cs.c0::before{background:#1B2D5B}.cs.c1::before{background:#7C3AED}.cs.c2::before{background:#0891B2}
 .cs.c3::before{background:#059669}.cs.c4::before{background:#DC2626}.cs.c5::before{background:#D97706}
-.cs.c6::before{background:#9333EA}.cs.c7::before{background:#0369A1}.cs.c8::before{background:#B45309}.cs.c9::before{background:#374151}.cs.c10::before{background:#065F46}.cs.c11::before{background:#16A34A}.cs.c12::before{background:#DB2777}.cs.c14::before{background:#6366F1}
+.cs.c6::before{background:#9333EA}.cs.c7::before{background:#0369A1}.cs.c8::before{background:#B45309}.cs.c9::before{background:#374151}.cs.c10::before{background:#065F46}.cs.c11::before{background:#16A34A}.cs.c12::before{background:#DB2777}.cs.c14::before{background:#6366F1}.cs.c15::before{background:#0EA5E9}
 .csv{font-size:18px;font-weight:700}
 .csl{font-size:7px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-top:2px}
 .css{font-size:8px;color:#999;margin-top:1px}
@@ -246,6 +246,7 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
           <label class="ck"><input type="checkbox" id="xeu"> Eurodatacar</label>
           <label class="ck"><input type="checkbox" id="xce"> Cession</label>
           <label class="ck"><input type="checkbox" id="xre"> Reprise</label>
+          <label class="ck"><input type="checkbox" id="xdv"> Dépôt vente</label>
           <label class="ck"><input type="checkbox" id="xvo"> VOE</label>
           <label class="ck"><input type="checkbox" id="xpl"> +120J</label>
         </div>
@@ -314,10 +315,13 @@ async function updObjM(){
   S.objM[objKey(S.annee,S.mois)]=parseFloat(document.getElementById('omi').value)||0;
   rProg();await saveAll();
 }
+// Dépôt vente : mémorisé dans la colonne texte « myana » sous la forme 'valide+dv' (aucune colonne à ajouter dans Supabase)
+function serMy(vt){return (vt.myana||'')+(vt.depot?'+dv':'');}
+function parseMy(t){const p=String(t||'').split('+');return {myana:p[0]||'',depot:p.slice(1).includes('dv')};}
 function rowOf(v,vt){
   return {
     vendeur:v.nom,date:vt.date||'',modele:vt.modele||'',immat:vt.immat||'',
-    client:vt.client||'',marge:vt.marge||0,myana:vt.myana||'',
+    client:vt.client||'',marge:vt.marge||0,myana:serMy(vt),
     facture:!!vt.facture,fi:!!vt.fi,mad:!!vt.mad,bulbee:!!vt.bulbee,
     coyote:!!vt.coyote,protech:!!vt.protech,euro:!!vt.euro,cession:!!vt.cession,
     reprise:!!vt.reprise,voe:!!vt.voe,plus120:!!vt.plus120,ca:vt.ca||0,
@@ -365,7 +369,7 @@ function applyRows(rows){
     nv.ventes = rows.filter(r=>r.vendeur===v.nom).map(r=>{
       const vt={
         date:r.date||'',modele:r.modele||'',immat:r.immat||'',client:r.client||'',
-        marge:parseFloat(r.marge)||0,myana:r.myana||'',facture:r.facture===true||r.facture==='true',
+        marge:parseFloat(r.marge)||0,myana:parseMy(r.myana).myana,depot:parseMy(r.myana).depot,facture:r.facture===true||r.facture==='true',
         fi:r.fi===true||r.fi==='true',mad:r.mad===true||r.mad==='true',bulbee:r.bulbee===true||r.bulbee==='true',coyote:r.coyote===true||r.coyote==='true',
         protech:r.protech===true||r.protech==='true',euro:r.euro===true||r.euro==='true',cession:r.cession===true||r.cession==='true',
         reprise:r.reprise===true||r.reprise==='true',voe:r.voe===true||r.voe==='true',plus120:r.plus120===true||r.plus120==='true',ca:parseFloat(r.ca)||0,
@@ -587,6 +591,7 @@ function rCumul(){
     {k:6,v:g('protech'),l:'PROTECH'},
     {k:8,v:g('cession'),l:'CESSION'},
     {k:14,v:g('reprise'),l:'REPRISES'},
+    {k:15,v:g('depot'),l:'DÉPÔT VENTE'},
     {k:9,v:g('voe'),l:'VOE'},{k:10,v:g('plus120'),l:'+120J'},
   ].map(it=>`<div class="cs c${it.k}"><div class="csv" style="${it.sm?'font-size:12px;':''}">${it.v}</div><div class="csl">${it.l}</div><div class="css"${it.sub?' style="color:#0D9488;font-weight:700;font-size:9px"':''}>${it.sub||'ce mois'}</div></div>`).join('');
 }
@@ -646,7 +651,7 @@ function oEdit(vi,idx){
   document.getElementById('fmg').value=vt.marge||'';document.getElementById('fca').value=vt.ca||'';document.getElementById('fmy').value=vt.myana==='annule'?'':(vt.myana||'');document.getElementById('fan').value=vt.myana==='annule'?'annule':'';
   document.getElementById('ffa').value=vt.facture?'oui':'';
   sc('xfi',vt.fi);sc('xma',vt.mad);sc('xbu',vt.bulbee);sc('xco',vt.coyote);sc('xpr',vt.protech);
-  sc('xeu',vt.euro);sc('xce',vt.cession);sc('xre',vt.reprise);sc('xvo',vt.voe);sc('xpl',vt.plus120);
+  sc('xeu',vt.euro);sc('xce',vt.cession);sc('xre',vt.reprise);sc('xdv',vt.depot);sc('xvo',vt.voe);sc('xpl',vt.plus120);
   document.getElementById('bdel').style.display='block';
   document.getElementById('ov').classList.add('open');
 }
@@ -661,7 +666,7 @@ async function savV(){
     fi:document.getElementById('xfi').checked,mad:document.getElementById('xma').checked,
     bulbee:document.getElementById('xbu').checked,coyote:document.getElementById('xco').checked,
     protech:document.getElementById('xpr').checked,euro:document.getElementById('xeu').checked,
-    cession:document.getElementById('xce').checked,reprise:document.getElementById('xre').checked,
+    cession:document.getElementById('xce').checked,reprise:document.getElementById('xre').checked,depot:document.getElementById('xdv').checked,
     voe:document.getElementById('xvo').checked,plus120:document.getElementById('xpl').checked,
     ca:parseFloat(document.getElementById('fca').value)||0,mois:S.mois,annee:S.annee,moisCde:S.mois,anneeCde:S.annee,
   };
@@ -886,6 +891,7 @@ async function dedupe(){
   if(!confirm(n+' ligne'+(n>1?'s':'')+' en double à supprimer ('+plans.length+' véhicule'+(plans.length>1?'s':'')+').\nOn garde la ligne facturée et on conserve le suivi My Ana.\n\n'+ex+(plans.length>10?'\n…':'')+'\n\nContinuer ?'))return;
   plans.forEach(p=>p.drop.forEach(d=>{
     if(!p.keep.x.myana&&d.x.myana)p.keep.x.myana=d.x.myana;
+    if(d.x.depot)p.keep.x.depot=true;
     const arr=S.vendeurs[d.vi].ventes;arr.splice(arr.indexOf(d.x),1);
     if(d.x._id!=null)_del.push(d.x._id);
   }));
