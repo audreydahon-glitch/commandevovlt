@@ -211,6 +211,8 @@ body{font-family:'Inter',sans-serif;background:#F2F2F0;color:#1A1A1A;font-size:1
     Ventes du mois par vendeur
     <label class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px">⬆ Importer factures<input type="file" accept=".xlsx,.xls" id="impM" style="display:none"></label>
     <button class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px;margin-left:6px" onclick="dedupe()">🧹 Doublons</button>
+    <button class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px;margin-left:6px" onclick="exportCmd(false)">⬇ Exporter le mois</button>
+    <button class="ibtn" style="text-transform:none;letter-spacing:0;font-size:10px;margin-left:6px" onclick="exportCmd(true)">⬇ Exporter tout</button>
   </div>
   <div id="vsecs"></div>
 </div>
@@ -860,6 +862,28 @@ document.getElementById('impM').addEventListener('change',e=>{if(e.target.files[
 document.getElementById('impA').addEventListener('change',e=>{if(e.target.files[0])importXL(e.target.files[0],null);e.target.value='';});
 
 // Détecte les ventes en double (même immatriculation, tirets/espaces ignorés) et propose de les fusionner
+// Export Excel des commandes : du mois affiché (all=false) ou de toutes les commandes (all=true)
+function exportCmd(all){
+  const mn=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  const oui=b=>b?'Oui':'';
+  const head=['Vendeur','Date','Modèle','Immat','Client','Marge (€)','Montant financé (€)','My Ana','Facturé','Annulée','FI','MAD','Eurodatacar','Coyote','Bulbee','Protech','Cession','Reprise','Dépôt vente','VOE','+120 j','Mois de commande','Mois de facture'];
+  const rows=[head];
+  S.vendeurs.forEach(v=>v.ventes.forEach(x=>{
+    const mc=parseInt(x.moisCde??x.mois),ac=parseInt(x.anneeCde??x.annee);
+    if(!all&&!(mc===S.mois&&ac===S.annee))return;
+    rows.push([v.nom,x.date||'',x.modele||'',x.immat||'',x.client||'',Number(x.marge)||0,Number(x.ca)||0,
+      x.myana==='valide'?'Validé':x.myana==='attente'?'Attente':'',oui(x.facture),oui(isAnn(x)),
+      oui(x.fi),oui(x.mad),oui(x.euro),oui(x.coyote),oui(x.bulbee),oui(x.protech),oui(x.cession),oui(x.reprise),oui(x.depot),oui(x.voe),oui(x.plus120),
+      (mn[mc]||'')+' '+ac,x.facture?(mn[parseInt(x.mois)]||'')+' '+parseInt(x.annee):'']);
+  }));
+  if(rows.length===1){alert('Aucune commande à exporter pour cette période.');return;}
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const w=[10,12,16,12,22,11,13,10,8,8,5,6,11,8,8,8,8,8,11,5,7,17,16];
+  ws['!cols']=w.map(n=>({wch:n}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,all?'Toutes les commandes':'Commandes du mois');
+  XLSX.writeFile(wb,all?'commandes_toutes.xlsx':'commandes_'+S.annee+'-'+String(S.mois+1).padStart(2,'0')+'_'+mn[S.mois]+'.xlsx');
+}
 async function dedupe(){
   const key=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   // Deux lignes sont la même vente si : même immatriculation, même vendeur, et
